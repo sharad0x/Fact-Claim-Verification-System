@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Fact & Claim Verification Engine</title>
+    <meta name="description" content="Extract, research, and verify claims from text, URLs, documents, and images using AI-powered multi-agent forensic analysis.">
+    <meta name="theme-color" content="#3b6cf5">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+    <!-- Theme Toggle -->
+    <button id="themeToggle" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+        <svg class="icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path stroke-linecap="round" stroke-width="2" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <svg class="icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
+    </button>
+
+    <div class="container">
+        
+        <header class="site-header">
+            <div class="header-row">
+                <h1 class="site-title">Automated Fact-Checking Engine</h1>
+            </div>
+            <p class="site-subtitle">Extract, Research, and Verify claims from text, URLs, Docs, and Images.</p>
+        </header>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="card loading-state hidden hide-on-export">
+            <div class="loading-center">
+                <div class="loader"></div>
+                <p id="loadingText" class="loading-text">Running Omni-Pipeline...</p>
+            </div>
+            <div class="terminal-section">
+                <h4 class="terminal-heading">Live Agent Terminal</h4>
+                <div id="systemLogs" class="terminal-log custom-scrollbar"></div>
+                <ul id="claimTrackerList" class="claim-tracker"></ul>
+            </div>
+        </div>
+
+        <!-- Report Container -->
+        <div id="reportContainer" class="hidden">
+
+            <!-- PDF Header (hidden until export) -->
+            <div class="pdf-header">
+                <div>
+                    <h1 style="font-size:1.6rem;font-weight:900;text-transform:uppercase;letter-spacing:-0.02em;color:#1a1d23;">Verification Report</h1>
+                    <p style="font-size:0.82rem;font-weight:600;color:#5a6270;margin-top:4px;">Accuracy AI Forensic Division</p>
+                </div>
+                <div style="text-align:right;">
+                    <p style="font-size:0.65rem;color:#8a919c;text-transform:uppercase;font-weight:700;">Generated On</p>
+                    <p id="pdfTimestamp" style="font-size:0.82rem;color:#1a1d23;font-family:monospace;"></p>
+                </div>
+            </div>
+
+            <!-- Report Header Bar -->
+            <div class="report-header-bar hide-on-export">
+                <h2 class="report-title">Final Accuracy Report</h2>
+                <div class="btn-group">
+                    <button id="exportCsvBtn" class="btn btn-green">Export CSV</button>
+                    <button id="exportPdfBtn" class="btn btn-red">Download PDF</button>
+                </div>
+            </div>
+
+            <!-- Source Content -->
+            <div class="source-block break-inside-avoid">
+                <h3 class="label">Original Source Content</h3>
+                <div id="originalInputDisplay" class="content"></div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid break-inside-avoid">
+                <div class="stat-card total">
+                    <p class="stat-label">Total Claims</p>
+                    <p id="statTotal" class="stat-value">0</p>
+                </div>
+                <div class="stat-card verified">
+                    <p class="stat-label">Verified True</p>
+                    <p id="statTrue" class="stat-value">0</p>
+                </div>
+                <div class="stat-card debunked">
+                    <p class="stat-label">Debunked False</p>
+                    <p id="statFalse" class="stat-value">0</p>
+                </div>
+                <div class="stat-card needs-context">
+                    <p class="stat-label">Needs Context</p>
+                    <p id="statMixed" class="stat-value">0</p>
+                </div>
+            </div>
+
+            <!-- Detection Cards -->
+            <div class="detection-row">
+                <div id="aiDetectionCard" class="detection-card ai-text hidden">
+                    <div class="detection-info">
+                        <h3 class="detection-title">AI Content Analysis</h3>
+                        <p id="aiAnalysisText" class="detection-text"></p>
+                    </div>
+                    <span id="aiScoreBadge" class="score-badge">--%</span>
+                </div>
+                <div id="mediaDetectionCard" class="detection-card deepfake hidden">
+                    <div class="detection-info">
+                        <h3 class="detection-title">Deepfake Forensic Analysis</h3>
+                        <p id="mediaAnalysisText" class="detection-text"></p>
+                    </div>
+                    <span id="mediaScoreBadge" class="score-badge">--%</span>
+                    <div id="pipelineBreakdown" class="pipeline-breakdown hidden">
+                        <button id="togglePipelineBtn" class="pipeline-toggle-btn">
+                            <h4 class="pipeline-heading mb-0">Pipeline Stage Breakdown</h4>
+                            <svg id="pipelineChevron" class="chevron-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                        
+                        <div id="pipelineContent" class="pipeline-stages hidden">
+                            <div class="pipeline-stage" id="stageForensic">
+                                <div class="stage-header">
+                                    <span class="stage-icon">🔬</span>
+                                    <span class="stage-name">Stage 1: Local Forensics</span>
+                                    <span class="stage-score" id="scoreForensic">--</span>
+                                </div>
+                                <div class="stage-bar"><div class="stage-fill" id="fillForensic"></div></div>
+                                <p class="stage-detail" id="detailForensic">ELA + FFT + Metadata</p>
+                            </div>
+                            <div class="pipeline-stage" id="stageHive">
+                                <div class="stage-header">
+                                    <span class="stage-icon">🤖</span>
+                                    <span class="stage-name">Stage 2: Hive ML Classifier</span>
+                                    <span class="stage-score" id="scoreHive">--</span>
+                                </div>
+                                <div class="stage-bar"><div class="stage-fill" id="fillHive"></div></div>
+                                <p class="stage-detail" id="detailHive">AI-Generated Image Detection</p>
+                            </div>
+                            <div class="pipeline-stage" id="stageVLM">
+                                <div class="stage-header">
+                                    <span class="stage-icon">👁️</span>
+                                    <span class="stage-name">Stage 3: VLM Vision</span>
+                                    <span class="stage-score" id="scoreVLM">--</span>
+                                </div>
+                                <div class="stage-bar"><div class="stage-fill" id="fillVLM"></div></div>
+                                <p class="stage-detail" id="detailVLM">Visual Anomaly Detection</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Verification Breakdown -->
+            <h3 class="section-heading">Granular Verification Breakdown</h3>
+            <div id="cardsArea" class="cards-area"></div>
+
+            <!-- PDF Footer (hidden until export) -->
+            <div class="pdf-footer">
+                <p style="font-size:0.6rem;color:#8a919c;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;">End of Automated Forensic Report</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fixed Input Dock -->
+    <div class="input-dock hide-on-export">
+        <div class="input-dock-inner">
+            <div class="input-wrapper">
+                <div id="filePreviewContainer" class="file-preview-container hidden"></div>
+                <div class="input-row">
+                    <button type="button" onclick="document.getElementById('fileUpload').click()" class="attach-btn" title="Attach file">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    </button>
+                    <input type="file" id="fileUpload" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.docx,.txt">
+                    <textarea id="inputText" rows="1" class="input-textarea custom-scrollbar" placeholder="Paste a link, upload a document, or ask 'Is this true?'..."></textarea>
+                    <button id="verifyBtn" class="send-btn" title="Verify">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
