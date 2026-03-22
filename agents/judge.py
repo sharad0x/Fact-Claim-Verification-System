@@ -4,8 +4,7 @@ import json
 
 def evaluate_claim(claim, evidence):
     """
-    Uses NVIDIA NIM API to evaluate a claim against retrieved evidence,
-    generating a verdict, confidence score, evidence context, and citations.
+    Evaluates a claim against retrieved evidence using Chain of Thought and Self-Reflection.
     """
     nim_api_key = os.getenv("NIM_API_KEY")
     url = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -15,45 +14,62 @@ def evaluate_claim(claim, evidence):
         "Content-Type": "application/json"
     }
 
+    # UPGRADED PROMPT: Forces the LLM to write out its thinking and critique itself BEFORE judging.
     system_prompt = """
-    You are an expert, impartial Fact-Checking Judge. 
-    You will be provided with a single 'Claim' and a block of 'Evidence' retrieved from the web.
+    You are an expert Fact-Checking Judge. Your task is to evaluate a claim against the provided evidence.
     
-    Evaluate the claim based strictly on the provided evidence. Do not use outside knowledge.
+    You MUST use a rigorous Chain of Thought and Self-Reflection process before reaching a final verdict.
     
-    Output a STRICT JSON object with the following keys:
-    - "verdict": Must be exactly one of ["True", "False", "Partially True", "Unverifiable"].
-    - "confidence_score": An integer from 0 to 100 representing your confidence in this verdict.
-    - "evidence_context": A brief, objective 1-2 sentence summary of the exact web evidence or facts you found that relate to this claim. (e.g., "Web sources indicate that...")
-    - "reasoning": Your analysis explaining why the evidence proves or disproves the claim.
-    - "citations": A list of URLs from the evidence that support your verdict. If unverifiable, return [].
+    Step 1 (chain_of_thought): Objectively analyze the claim. Then, map specific sentences from the evidence to the claim's assertions.
+    Step 2 (self_critique): Act as a harsh critic. Ask yourself: "Does the evidence explicitly prove/disprove this, or am I making dangerous assumptions? Are the sources talking about the exact same time period and entity?"
+    Step 3 (verdict): Decide the final status based STRICTLY on the outcome of your critique.
+    
+    Options for Verdict: "True", "False", "Partially True", "Unverifiable".
+    If the evidence is unrelated, contradictory, or insufficient, you MUST choose "Unverifiable".
+    
+    Output STRICTLY in JSON format:
+    {
+      "chain_of_thought": "Your step-by-step analysis mapping evidence to the claim.",
+      "self_critique": "Your critical reflection checking for your own assumptions or timeline mismatches.",
+      "verdict": "True | False | Partially True | Unverifiable",
+      "confidence_score": 0-100,
+      "evidence_context": "A 1-2 sentence summary of what the evidence actually says.",
+      "reasoning": "A concise explanation for the user of why this verdict was reached.",
+      "citations": ["url1", "url2"]
+    }
     """
-
-    user_prompt = f"Claim: {claim}\n\nEvidence:\n{evidence}"
 
     payload = {
         "model": "meta/llama-3.3-70b-instruct",
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": f"Claim: {claim}\n\nEvidence:\n{evidence}"}
         ],
-        "temperature": 0.1, 
-        "max_tokens": 512,
+        "temperature": 0.1,
+        "max_tokens": 1024,
         "response_format": {"type": "json_object"}
     }
 
     try:
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()
-        result = response.json()
-        return json.loads(result['choices'][0]['message']['content'])
-
+        
+        # Parse the JSON response
+        content = response.json()['choices'][0]['message']['content']
+        result = json.loads(content)
+        
+        # Ensure citations is always a list
+        if "citations" not in result or not isinstance(result["citations"], list):
+            result["citations"] = []
+            
+        return result
+        
     except Exception as e:
-        print(f"Judgment Error for claim '{claim}': {e}")
+        print(f"Judging Error: {e}")
         return {
             "verdict": "Error",
             "confidence_score": 0,
-            "evidence_context": "Failed to retrieve or process context.",
-            "reasoning": "The verification engine encountered an API error.",
+            "evidence_context": "Failed to evaluate due to system error.",
+            "reasoning": str(e),
             "citations": []
         }

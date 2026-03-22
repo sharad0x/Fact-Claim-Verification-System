@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from agents.parser import scrape_url, parse_document
 from agents.detector import detect_ai_content
-# FIX: Correctly importing analyze_image
+from agents.audio_detector import analyze_audio
 from agents.media_detector import analyze_image
 from agents.router import triage_input
 from agents.extractor import extract_claims
@@ -80,7 +80,34 @@ def verify_claim_route():
                 score = ai_media_results.get('media_ai_score', 0)
                 confidence = ai_media_results.get('confidence_level', 'N/A')
                 yield sse_message({"step": "system", "message": f"Deepfake Analysis Complete. Ensemble score: {score}/100 ({confidence} confidence)"})
-
+            
+            # --- PHASE 2.5: AUDIO DEEPFAKE ANALYSIS ---
+            audio_files = [f for f in files if "audio" in f.get("type", "").lower()]
+            
+            if audio_files:
+                primary_audio = audio_files[0]
+                yield sse_message({"step": "system", "message": f"Agent 0c: Initializing Audio Forensic pipeline for {primary_audio.get('name', 'audio')}..."})
+                
+                pipeline_messages = []
+                def pipeline_progress(msg):
+                    pipeline_messages.append(msg)
+                
+                ai_media_results = analyze_audio(primary_audio["data"], primary_audio["name"], progress_callback=pipeline_progress)
+                
+                for msg in pipeline_messages:
+                    yield sse_message({"step": "system", "message": f"  ↳ {msg}"})
+                
+                # Because we set extracted_text to "" in audio_detector, this safely skips 
+                # appending dummy text and lets LlamaParse's real text flow through!
+                extracted_text = ai_media_results.get("extracted_text", "").strip()
+                if extracted_text:
+                    yield sse_message({"step": "system", "message": f"Triage: Speech detected. Transcribing audio for verification..."})
+                    verification_text = f"{verification_text}\n{extracted_text}".strip()
+                
+                score = ai_media_results.get('media_ai_score', 0)
+                confidence = ai_media_results.get('confidence_level', 'N/A')
+                yield sse_message({"step": "system", "message": f"Audio Deepfake Analysis Complete. Ensemble score: {score}/100 ({confidence} confidence)"})
+                
             # --- PHASE 3: TEXT ANALYSIS ---
             ai_text_results = None
             if verification_text.strip():

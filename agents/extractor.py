@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+from datetime import datetime # FIX: Import datetime for temporal grounding
 
 def extract_claims(text):
     """
@@ -14,8 +15,11 @@ def extract_claims(text):
         "Content-Type": "application/json"
     }
 
-    # UPGRADED PROMPT: Added Rule 5 to destroy chat filler, timestamps, and UI artifacts
-    system_prompt = """
+    # FIX: Get the exact current date to inject into the AI's brain
+    current_date = datetime.now().strftime("%B %Y") # e.g., "March 2026"
+
+    # UPGRADED PROMPT: Added Rule 7 for Temporal Grounding
+    system_prompt = f"""
     You are an expert Fact-Checking Claim Extractor.
     Your task is to decompose the user's input text into discrete, verifiable, atomic statements.
     
@@ -23,9 +27,10 @@ def extract_claims(text):
     1. Atomic Independence: Every extracted claim MUST be fully verifiable on its own without needing to read the surrounding claims.
     2. Resolve Pronouns: Replace all pronouns (he, she, it, they, his, her) with the explicit name or subject from the text.
     3. Bind Context (For Localized Events): If the text describes a specific event, you MUST append the core subject, location, and time to every sub-claim that lacks it. 
-    4. Exemption (For Universal Facts): If a statement is a universal, timeless fact (e.g., "Water boils at 100C" or "The Eiffel Tower is in Paris"), do NOT append localized context.
-    5. Drop Conversational Filler: Completely ignore greetings, timestamps (e.g., '01:18'), UI text, usernames, and conversational filler (e.g., 'Hey check the news'). Extract ONLY the core verifiable factual claims.
-    6. Format OCR Text: Insert proper punctuation and grammatical breaks when extracting raw OCR text. Convert ALL CAPS text into standard sentence case.
+    4. Exemption (For Universal Facts): If a statement is a universal, timeless fact (e.g., "Water boils at 100C"), do NOT append localized context.
+    5. Drop Conversational Filler: Completely ignore greetings, timestamps, UI text, and conversational filler.
+    6. Format OCR Text: Insert proper punctuation and grammatical breaks when extracting raw OCR text.
+    7. TEMPORAL GROUNDING: Today's date is {current_date}. If a claim uses relative time words like "current", "now", "today", or "presently", you MUST replace them with or append "{current_date}" to lock the claim in time. (e.g., "The current CEO is Sam Altman" MUST become "The CEO as of {current_date} is Sam Altman").
     
     Output STRICTLY in JSON format as a list of strings. Example: ["Claim 1", "Claim 2"]
     """

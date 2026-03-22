@@ -280,47 +280,45 @@
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                 </button>
                                 <div class="attachment-menu hidden" id="attachmentMenu">
-                                    <button type="button" class="menu-item" data-category="documents">
-                                        <span class="menu-item-icon">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                        </span>
-                                        <div class="menu-item-text">
-                                            <div class="menu-item-label">Documents</div>
-                                            <div class="menu-item-sub">.pdf, .docx, .txt</div>
-                                        </div>
-                                    </button>
-                                    <button type="button" class="menu-item" data-category="images">
-                                        <span class="menu-item-icon">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                                        </span>
-                                        <div class="menu-item-text">
-                                            <div class="menu-item-label">Images</div>
-                                            <div class="menu-item-sub">.jpg, .png</div>
-                                        </div>
-                                    </button>
-                                    <button type="button" class="menu-item" data-category="all">
-                                        <span class="menu-item-icon">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                                        </span>
-                                        <div class="menu-item-text">
-                                            <div class="menu-item-label">All Supported Files</div>
-                                            <div class="menu-item-sub">Mix text and images</div>
-                                        </div>
-                                    </button>
+                            <button type="button" class="menu-item" data-category="documents">
+                                <span style="font-size:1.2rem;margin-right:12px;">📄</span>
+                                <div style="text-align:left;">
+                                    <div style="font-weight:600;font-size:0.85rem;">Documents</div>
+                                    <div style="font-size:0.7rem;color:var(--text-tertiary);">.pdf, .docx, .txt</div>
                                 </div>
-                            </div>
+                            </button>
+                            <button type="button" class="menu-item" data-category="images">
+                                <span style="font-size:1.2rem;margin-right:12px;">🖼️</span>
+                                <div style="text-align:left;">
+                                    <div style="font-weight:600;font-size:0.85rem;">Images</div>
+                                    <div style="font-size:0.7rem;color:var(--text-tertiary);">.jpg, .png</div>
+                                </div>
+                            </button>
+                            <button type="button" class="menu-item" data-category="audio">
+                                <span style="font-size:1.2rem;margin-right:12px;">🎵</span>
+                                <div style="text-align:left;">
+                                    <div style="font-weight:600;font-size:0.85rem;">Audio File</div>
+                                    <div style="font-size:0.7rem;color:var(--text-tertiary);">.mp3, .wav, .m4a</div>
+                                </div>
+                            </button>
+                            <button type="button" class="menu-item" data-category="all">
+                                <span style="font-size:1.2rem;margin-right:12px;">📦</span>
+                                <div style="text-align:left;">
+                                    <div style="font-weight:600;font-size:0.85rem;">All Supported Files</div>
+                                    <div style="font-size:0.7rem;color:var(--text-tertiary);">Mix text, images & audio</div>
+                                </div>
+                            </button>
                         </div>
-                        <button id="verifyBtn" class="btn-send" title="Run Analysis">
-                            <span>Analyze</span>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                        </button>
                     </div>
-                </div>
-                <p class="input-hint">Press Enter to submit &middot; Shift+Enter for new line</p>
-            </div>
+                </div> <button id="verifyBtn" class="btn-send" title="Run Analysis">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+
+            </div> 
             <input type="file" id="fileUploadDocuments" class="hidden" accept=".pdf,.docx,.txt" multiple>
             <input type="file" id="fileUploadImages" class="hidden" accept=".jpg,.jpeg,.png" multiple>
-            <input type="file" id="fileUploadAll" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.docx,.txt" multiple>
+            <input type="file" id="fileUploadAudio" class="hidden" accept=".mp3,.wav,.m4a" multiple>
+            <input type="file" id="fileUploadAll" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.docx,.txt,.mp3,.wav,.m4a" multiple>
         </div>
     </div>
 

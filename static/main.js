@@ -326,15 +326,18 @@ function initAttachmentMenu() {
             e.preventDefault();
             e.stopPropagation();
             const category = item.getAttribute('data-category');
-            const fileInputMap = { 'documents': 'fileUploadDocuments', 'images': 'fileUploadImages', 'all': 'fileUploadAll' };
-            const fileInput = document.getElementById(fileInputMap[category]);
+            const fileInputMap = { 'documents': 'fileUploadDocuments', 'images': 'fileUploadImages', 'audio': 'fileUploadAudio', 'all': 'fileUploadAll' };
+            
+            // FIX: Added the missing line to actually find the input element by its ID
+            const fileInput = document.getElementById(fileInputMap[category]); 
+            
             if (fileInput) fileInput.click();
             attachmentMenu.classList.add('hidden');
         });
     });
 }
 
-['Documents', 'Images', 'All'].forEach(category => {
+['Documents', 'Images', 'Audio', 'All'].forEach(category => {
     const input = document.getElementById(`fileUpload${category}`);
     if (input) input.addEventListener('change', handleFileUpload);
 });
@@ -365,7 +368,7 @@ function renderFilePreview() {
     filePreviewContainer.classList.remove('hidden');
     
     attachedFiles.forEach((file, index) => {
-        let icon = file.type.startsWith('image/') ? '🖼️' : '📄';
+        let icon = file.type.startsWith('image/') ? '🖼️' : file.type.startsWith('audio/') ? '🎵' : '📄';
         filePreviewContainer.innerHTML += `
             <div class="file-preview-chip clickable" onclick="if(event.target.tagName !== 'BUTTON') openDocModal('${file.name}', attachedFiles[${index}].data)">                <span class="file-icon">${icon}</span>
                 <div style="overflow:hidden;flex:1;padding-right:12px;">
@@ -397,7 +400,7 @@ document.getElementById('verifyBtn').addEventListener('click', async () => {
     const textVal = inputText.value.trim();
     if (!textVal && attachedFiles.length === 0) return alert("Please provide input or upload files.");
 
-    let inputType = isLikelyURL(textVal) ? "url" : (attachedFiles.length > 0 ? (attachedFiles[0].type.startsWith('image/') ? "image" : "document") : "text");
+    let inputType = isLikelyURL(textVal) ? "url" : (attachedFiles.length > 0 ? (attachedFiles[0].type.startsWith('image/') ? "image" : attachedFiles[0].type.startsWith('audio/') ? "audio" : "document") : "text");
     const payload = { type: inputType, text: textVal, files: attachedFiles };
 
     document.getElementById('welcomeScreen').classList.add('hidden');
@@ -546,42 +549,91 @@ function populateReportUI(data) {
         mediaCard.classList.remove('hidden');
         document.getElementById('mediaAnalysisText').innerText = data.ai_media_detection.visual_analysis;
         
-        // FIX: Removed the 'isScreenshot' bypass completely so the score ALWAYS displays!
+        // Check if it's audio or image to update the Card Title dynamically
+        const isAudio = data.ai_media_detection.media_type === "audio";
+        mediaCard.querySelector('.detection-title').innerText = isAudio ? "Voice Deepfake Analysis" : "Deepfake Forensic Analysis";
+        
+        // FIX 1: Dynamically update the Pipeline Stage Names based on the media type
+        const stage1Title = document.querySelector('#stageForensic .stage-name');
+        const stage2Title = document.querySelector('#stageHive .stage-name');
+        const stage3Title = document.querySelector('#stageVLM .stage-name');
+        
+        if (isAudio) {
+            if (stage1Title) stage1Title.innerText = "Stage 1: Acoustic Extraction";
+            if (stage2Title) stage2Title.innerText = "Stage 2: Hugging Face Inference";
+            if (stage3Title) stage3Title.innerText = "Stage 3: Voice Anomaly Scoring";
+        } else {
+            if (stage1Title) stage1Title.innerText = "Stage 1: Local Forensics";
+            if (stage2Title) stage2Title.innerText = "Stage 2: Hive ML Classifier";
+            if (stage3Title) stage3Title.innerText = "Stage 3: VLM Vision";
+        }
+        
         document.getElementById('mediaScoreBadge').innerText = `${data.ai_media_detection.media_ai_score}%`;
         
         const details = data.ai_media_detection.pipeline_details;
         if (details) {
             pipelineBreakdown.classList.remove('hidden');
             
-            const s1 = details.stage1_forensic;
-            if (s1) {
-                document.getElementById('scoreForensic').innerText = `${s1.score}/100`;
-                document.getElementById('fillForensic').style.width = `${s1.score}%`;
-                document.getElementById('fillForensic').style.background = getScoreGradient(s1.score);
-                document.getElementById('detailForensic').innerText = s1.summary || 'ELA + FFT + Metadata';
-            }
-            
-            const s2 = details.stage2_hive;
-            if (s2) {
-                document.getElementById('scoreHive').innerText = s2.status === 'success' ? `${s2.score}/100` : 'Error';
-                document.getElementById('fillHive').style.width = s2.status === 'success' ? `${s2.score}%` : '0%';
-                document.getElementById('fillHive').style.background = getScoreGradient(s2.score);
-                document.getElementById('detailHive').innerText = s2.status === 'success' 
-                    ? `AI prob: ${(s2.ai_prob * 100).toFixed(1)}% | Confidence: ${s2.confidence}`
-                    : `Status: ${s2.status}`;
-            }
-            
-            const s3 = details.stage3_vlm;
-            if (s3) {
-                const vlmOk = (s3.status === 'success' || s3.status === 'parse_fallback' || s3.status === 'safety_block');
-                document.getElementById('scoreVLM').innerText = vlmOk ? `${s3.score}/100` : 'Error';
-                document.getElementById('fillVLM').style.width = vlmOk ? `${s3.score}%` : '0%';
-                document.getElementById('fillVLM').style.background = getScoreGradient(s3.score);
-                document.getElementById('detailVLM').innerText = s3.anomalies || 'Visual Anomaly Detection';
+            // --- NEW: COLLAPSED 1-STAGE UI FOR AUDIO ---
+            if (isAudio) {
+                // Show only Stage 1 and hide the others
+                document.getElementById('stageForensic').classList.remove('hidden');
+                document.getElementById('stageHive').classList.add('hidden');
+                document.getElementById('stageVLM').classList.add('hidden');
+                
+                const s1 = details.stage1_llm;
+                if (s1) {
+                    document.querySelector('#stageForensic .stage-name').innerText = "Stage 1: Multimodal LLM Analysis";
+                    document.getElementById('scoreForensic').innerText = `${s1.score}/100`;
+                    document.getElementById('fillForensic').style.width = `${s1.score}%`;
+                    document.getElementById('fillForensic').style.background = getScoreGradient(s1.score);
+                    document.getElementById('detailForensic').innerText = s1.summary;
+                }
+            } 
+            // --- EXISTING: 3-STAGE UI FOR IMAGES ---
+            else {
+                document.getElementById('stageForensic').classList.remove('hidden');
+                document.getElementById('stageHive').classList.remove('hidden');
+                document.getElementById('stageVLM').classList.remove('hidden');
+                
+                document.querySelector('#stageForensic .stage-name').innerText = "Stage 1: Local Forensics";
+                const s1 = details.stage1_forensic;
+                if (s1) {
+                    document.getElementById('scoreForensic').innerText = `${s1.score}/100`;
+                    document.getElementById('fillForensic').style.width = `${s1.score}%`;
+                    document.getElementById('fillForensic').style.background = getScoreGradient(s1.score);
+                    document.getElementById('detailForensic').innerText = s1.summary || 'ELA + FFT + Metadata';
+                }
+                
+                const s2 = details.stage2_hive;
+                if (s2) {
+                    document.getElementById('scoreHive').innerText = s2.status === 'success' ? `${s2.score}/100` : 'Error';
+                    document.getElementById('fillHive').style.width = s2.status === 'success' ? `${s2.score}%` : '0%';
+                    document.getElementById('fillHive').style.background = getScoreGradient(s2.score);
+                    
+                    let cleanStatus = s2.status;
+                    if (cleanStatus && cleanStatus !== 'success' && cleanStatus.length > 45) {
+                        cleanStatus = "API Timeout or Connection Dropped.";
+                    }
+                    
+                    document.getElementById('detailHive').innerText = s2.status === 'success' 
+                        ? `AI prob: ${(s2.ai_prob * 100).toFixed(1)}% | Confidence: ${s2.confidence}`
+                        : `Status: ${cleanStatus}`;
+                }
+                
+                const s3 = details.stage3_vlm;
+                if (s3) {
+                    const vlmOk = (s3.status === 'success' || s3.status === 'parse_fallback' || s3.status === 'safety_block');
+                    document.getElementById('scoreVLM').innerText = vlmOk ? `${s3.score}/100` : 'Error';
+                    document.getElementById('fillVLM').style.width = vlmOk ? `${s3.score}%` : '0%';
+                    document.getElementById('fillVLM').style.background = getScoreGradient(s3.score);
+                    document.getElementById('detailVLM').innerText = s3.anomalies || 'Visual Anomaly Detection';
+                }
             }
         } else {
             pipelineBreakdown.classList.add('hidden');
         }
+        
     } else {
         mediaCard.classList.add('hidden');
         pipelineBreakdown.classList.add('hidden');
