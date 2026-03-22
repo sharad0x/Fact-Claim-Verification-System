@@ -194,8 +194,11 @@ def analyze_image(base64_image_data, progress_callback=None):
 
     _emit("Computing ensemble score...")
     ensemble_score, confidence = _ensemble_score(
-        forensic["forensic_score"], hive["hive_score"], vlm["vlm_score"],
-        hive["status"], vlm.get("status", "error")
+        forensic.get("forensic_score", 0), 
+        hive.get("hive_score", 0), 
+        vlm.get("vlm_score", 0),
+        hive.get("status", "error"), 
+        vlm.get("status", "error")
     )
 
     analysis_parts = [f"[ENSEMBLE: {confidence.upper()} CONFIDENCE]"]

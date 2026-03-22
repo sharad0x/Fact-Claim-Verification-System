@@ -5,170 +5,338 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Fact & Claim Verification Engine</title>
     <meta name="description" content="Extract, research, and verify claims from text, URLs, documents, and images using AI-powered multi-agent forensic analysis.">
-    <meta name="theme-color" content="#3b6cf5">
-
+    <meta name="theme-color" content="#6366f1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
+
     <!-- Theme Toggle -->
-    <button id="themeToggle" class="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
-        <svg class="icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path stroke-linecap="round" stroke-width="2" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-        <svg class="icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>
+    <button id="themeToggle" class="theme-toggle hide-on-export" title="Toggle theme" aria-label="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
     </button>
 
-    <div class="container">
-        
-        <header class="site-header">
-            <div class="header-row">
-                <h1 class="site-title">Automated Fact-Checking Engine</h1>
+    <!-- Session Sidebar -->
+    <aside class="session-sidebar hide-on-export" id="sessionSidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-brand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+                </svg>
+                <h2 class="sidebar-title">Sessions</h2>
             </div>
-            <p class="site-subtitle">Extract, Research, and Verify claims from text, URLs, Docs, and Images.</p>
-        </header>
-
-        <!-- Loading State -->
-        <div id="loadingState" class="card loading-state hidden hide-on-export">
-            <div class="loading-center">
-                <div class="loader"></div>
-                <p id="loadingText" class="loading-text">Running Omni-Pipeline...</p>
-            </div>
-            <div class="terminal-section">
-                <h4 class="terminal-heading">Live Agent Terminal</h4>
-                <div id="systemLogs" class="terminal-log custom-scrollbar"></div>
-                <ul id="claimTrackerList" class="claim-tracker"></ul>
-            </div>
+            <button class="sidebar-close-btn" id="sidebarCloseBtn" title="Close sidebar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+            </button>
         </div>
+        <div class="sessions-list" id="sessionsList"></div>
+        <button class="new-session-btn" id="newSessionBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <path d="M12 5v14M5 12h14"/>
+            </svg>
+            New Session
+        </button>
+    </aside>
 
-        <!-- Report Container -->
-        <div id="reportContainer" class="hidden">
+    <!-- Sidebar Toggle -->
+    <button class="sidebar-toggle-btn hide-on-export" id="sidebarToggleBtn" title="Toggle sessions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 12h18M3 6h18M3 18h18"/>
+        </svg>
+    </button>
 
-            <!-- PDF Header (hidden until export) -->
-            <div class="pdf-header">
-                <div>
-                    <h1 style="font-size:1.6rem;font-weight:900;text-transform:uppercase;letter-spacing:-0.02em;color:#1a1d23;">Verification Report</h1>
-                    <p style="font-size:0.82rem;font-weight:600;color:#5a6270;margin-top:4px;">Accuracy AI Forensic Division</p>
-                </div>
-                <div style="text-align:right;">
-                    <p style="font-size:0.65rem;color:#8a919c;text-transform:uppercase;font-weight:700;">Generated On</p>
-                    <p id="pdfTimestamp" style="font-size:0.82rem;color:#1a1d23;font-family:monospace;"></p>
-                </div>
-            </div>
+    <!-- Main Layout -->
+    <div class="app-layout">
+        <div class="container">
 
-            <!-- Report Header Bar -->
-            <div class="report-header-bar hide-on-export">
-                <h2 class="report-title">Final Accuracy Report</h2>
-                <div class="btn-group">
-                    <button id="exportCsvBtn" class="btn btn-green">Export CSV</button>
-                    <button id="exportPdfBtn" class="btn btn-red">Download PDF</button>
+            <header class="header">
+                <div class="header-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    AI Forensic Engine
                 </div>
-            </div>
+                <h1 class="title">Automated Fact-Checking</h1>
+                <p class="subtitle">Extract, research, and verify claims from text, URLs, documents, and images.</p>
+            </header>
 
-            <!-- Source Content -->
-            <div class="source-block break-inside-avoid">
-                <h3 class="label">Original Source Content</h3>
-                <div id="originalInputDisplay" class="content"></div>
-            </div>
-
-            <!-- Stats Grid -->
-            <div class="stats-grid break-inside-avoid">
-                <div class="stat-card total">
-                    <p class="stat-label">Total Claims</p>
-                    <p id="statTotal" class="stat-value">0</p>
-                </div>
-                <div class="stat-card verified">
-                    <p class="stat-label">Verified True</p>
-                    <p id="statTrue" class="stat-value">0</p>
-                </div>
-                <div class="stat-card debunked">
-                    <p class="stat-label">Debunked False</p>
-                    <p id="statFalse" class="stat-value">0</p>
-                </div>
-                <div class="stat-card needs-context">
-                    <p class="stat-label">Needs Context</p>
-                    <p id="statMixed" class="stat-value">0</p>
-                </div>
-            </div>
-
-            <!-- Detection Cards -->
-            <div class="detection-row">
-                <div id="aiDetectionCard" class="detection-card ai-text hidden">
-                    <div class="detection-info">
-                        <h3 class="detection-title">AI Content Analysis</h3>
-                        <p id="aiAnalysisText" class="detection-text"></p>
+            <!-- Welcome Screen -->
+            <div id="welcomeScreen" class="welcome-screen hidden">
+                <div class="welcome-container">
+                    <div class="welcome-icon-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
                     </div>
-                    <span id="aiScoreBadge" class="score-badge">--%</span>
-                </div>
-                <div id="mediaDetectionCard" class="detection-card deepfake hidden">
-                    <div class="detection-info">
-                        <h3 class="detection-title">Deepfake Forensic Analysis</h3>
-                        <p id="mediaAnalysisText" class="detection-text"></p>
+                    <h2 class="welcome-title">Verify Claims with AI</h2>
+                    <p class="welcome-description">Multi-agent forensic pipeline that extracts, researches, and verifies claims from any source.</p>
+                    <div class="welcome-features">
+                        <div class="feature-item">
+                            <span class="feature-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            </span>
+                            <div>
+                                <h4>Multiple Input Types</h4>
+                                <p>Text, URLs, Documents, or Images</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                            </span>
+                            <div>
+                                <h4>Multi-Agent Pipeline</h4>
+                                <p>Specialized agents for verification</p>
+                            </div>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                            </span>
+                            <div>
+                                <h4>Detailed Reports</h4>
+                                <p>Export as PDF or CSV</p>
+                            </div>
+                        </div>
                     </div>
-                    <span id="mediaScoreBadge" class="score-badge">--%</span>
-                    <div id="pipelineBreakdown" class="pipeline-breakdown hidden">
-                        <button id="togglePipelineBtn" class="pipeline-toggle-btn">
-                            <h4 class="pipeline-heading mb-0">Pipeline Stage Breakdown</h4>
-                            <svg id="pipelineChevron" class="chevron-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <p class="welcome-cta">Enter text, paste a link, or upload a file below to begin.</p>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-state hidden hide-on-export">
+                <div class="terminal-window">
+                    <div class="terminal-header">
+                        <div class="terminal-dots">
+                            <span class="dot dot-red"></span>
+                            <span class="dot dot-yellow"></span>
+                            <span class="dot dot-green"></span>
+                        </div>
+                        <span class="terminal-filename">pipeline-execution.log</span>
+                        <div class="terminal-pulse">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                    <div id="systemLogs" class="terminal-body custom-scrollbar"></div>
+                </div>
+                <div class="claim-tracker">
+                    <h4>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        Claim Extraction Status
+                    </h4>
+                    <ul id="claimTrackerList" class="tracker-list"></ul>
+                </div>
+            </div>
+
+            <!-- Report Container -->
+            <div id="reportContainer" class="hidden">
+
+
+                <div class="report-header hide-on-export">
+                    <div class="report-title-group">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        <h2 class="section-title mb-0">Accuracy Report</h2>
+                    </div>
+                    <div class="export-actions">
+                        <button id="exportCsvBtn" class="btn-secondary">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Export CSV
                         </button>
                         
-                        <div id="pipelineContent" class="pipeline-stages hidden">
-                            <div class="pipeline-stage" id="stageForensic">
-                                <div class="stage-header">
-                                    <span class="stage-icon">🔬</span>
-                                    <span class="stage-name">Stage 1: Local Forensics</span>
-                                    <span class="stage-score" id="scoreForensic">--</span>
+                        <button id="exportHtmlBtn" class="btn-secondary" style="border-color: #8b5cf6; color: #8b5cf6;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="margin-right: 6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                            Export Interactive HTML
+                        </button>
+                        <button id="exportPdfBtn" class="btn-danger">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div class="original-source-box">
+                    <span class="source-label">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/></svg>
+                        Original Source Content
+                    </span>
+                    <div id="originalInputDisplay" class="source-content"></div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-card total">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                        </div>
+                        <span class="stat-label">Total Claims</span>
+                        <span id="statTotal" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card true">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        </div>
+                        <span class="stat-label">Verified True</span>
+                        <span id="statTrue" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card false">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        </div>
+                        <span class="stat-label">Debunked False</span>
+                        <span id="statFalse" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-card mixed">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </div>
+                        <span class="stat-label">Needs Context</span>
+                        <span id="statMixed" class="stat-value">0</span>
+                    </div>
+                </div>
+
+                <div class="detection-row">
+                    <div id="aiDetectionCard" class="detection-card ai-text hidden">
+                        <div class="detection-info">
+                            <h3 class="detection-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h1v6H9M14 9h1.5a1.5 1.5 0 0 1 0 3H14v3"/></svg>
+                                AI Content Analysis
+                            </h3>
+                            <p id="aiAnalysisText" class="detection-text"></p>
+                        </div>
+                        <span id="aiScoreBadge" class="score-badge">--%</span>
+                    </div>
+                    <div id="mediaDetectionCard" class="detection-card deepfake hidden">
+                        <div class="detection-info">
+                            <h3 class="detection-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                Deepfake Forensic Analysis
+                            </h3>
+                            <p id="mediaAnalysisText" class="detection-text"></p>
+                        </div>
+                        <span id="mediaScoreBadge" class="score-badge">--%</span>
+                        <div id="pipelineBreakdown" class="pipeline-breakdown hidden">
+                            <button id="togglePipelineBtn" class="pipeline-toggle-btn">
+                                <span class="pipeline-heading">Pipeline Stage Breakdown</span>
+                                <svg id="pipelineChevron" class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+                            </button>
+                            <div id="pipelineContent" class="pipeline-stages hidden">
+                                <div class="pipeline-stage" id="stageForensic">
+                                    <div class="stage-header">
+                                        <svg class="stage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+                                        <span class="stage-name">Stage 1: Local Forensics</span>
+                                        <span class="stage-score" id="scoreForensic">--</span>
+                                    </div>
+                                    <div class="stage-bar"><div class="stage-fill" id="fillForensic"></div></div>
+                                    <p class="stage-detail" id="detailForensic">ELA + FFT + Metadata</p>
                                 </div>
-                                <div class="stage-bar"><div class="stage-fill" id="fillForensic"></div></div>
-                                <p class="stage-detail" id="detailForensic">ELA + FFT + Metadata</p>
-                            </div>
-                            <div class="pipeline-stage" id="stageHive">
-                                <div class="stage-header">
-                                    <span class="stage-icon">🤖</span>
-                                    <span class="stage-name">Stage 2: Hive ML Classifier</span>
-                                    <span class="stage-score" id="scoreHive">--</span>
+                                <div class="pipeline-stage" id="stageHive">
+                                    <div class="stage-header">
+                                        <svg class="stage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+                                        <span class="stage-name">Stage 2: Hive ML Classifier</span>
+                                        <span class="stage-score" id="scoreHive">--</span>
+                                    </div>
+                                    <div class="stage-bar"><div class="stage-fill" id="fillHive"></div></div>
+                                    <p class="stage-detail" id="detailHive">AI-Generated Image Detection</p>
                                 </div>
-                                <div class="stage-bar"><div class="stage-fill" id="fillHive"></div></div>
-                                <p class="stage-detail" id="detailHive">AI-Generated Image Detection</p>
-                            </div>
-                            <div class="pipeline-stage" id="stageVLM">
-                                <div class="stage-header">
-                                    <span class="stage-icon">👁️</span>
-                                    <span class="stage-name">Stage 3: VLM Vision</span>
-                                    <span class="stage-score" id="scoreVLM">--</span>
+                                <div class="pipeline-stage" id="stageVLM">
+                                    <div class="stage-header">
+                                        <svg class="stage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        <span class="stage-name">Stage 3: VLM Vision</span>
+                                        <span class="stage-score" id="scoreVLM">--</span>
+                                    </div>
+                                    <div class="stage-bar"><div class="stage-fill" id="fillVLM"></div></div>
+                                    <p class="stage-detail" id="detailVLM">Visual Anomaly Detection</p>
                                 </div>
-                                <div class="stage-bar"><div class="stage-fill" id="fillVLM"></div></div>
-                                <p class="stage-detail" id="detailVLM">Visual Anomaly Detection</p>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Verification Breakdown -->
-            <h3 class="section-heading">Granular Verification Breakdown</h3>
-            <div id="cardsArea" class="cards-area"></div>
+                <h3 class="section-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    Granular Verification Breakdown
+                </h3>
+                <div id="cardsArea" class="cards-container"></div>
 
-            <!-- PDF Footer (hidden until export) -->
-            <div class="pdf-footer">
-                <p style="font-size:0.6rem;color:#8a919c;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;">End of Automated Forensic Report</p>
             </div>
+        </div>
+
+        <!-- Input Dock — in flow, not fixed -->
+        <div class="input-dock hide-on-export">
+            <div class="input-dock-inner">
+                <div class="input-wrapper">
+                    <div id="filePreviewContainer" class="file-preview-container hidden"></div>
+                    <textarea id="inputText" class="input-textarea custom-scrollbar" placeholder="Paste a link, upload documents, or ask 'Is this true?'..." rows="1"></textarea>
+                    <div class="input-actions">
+                        <div class="input-left-actions">
+                            <div class="attachment-menu-wrapper">
+                                <button type="button" class="btn-icon" id="attachMenuBtn" title="Attach files">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                                </button>
+                                <div class="attachment-menu hidden" id="attachmentMenu">
+                                    <button type="button" class="menu-item" data-category="documents">
+                                        <span class="menu-item-icon">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                        </span>
+                                        <div class="menu-item-text">
+                                            <div class="menu-item-label">Documents</div>
+                                            <div class="menu-item-sub">.pdf, .docx, .txt</div>
+                                        </div>
+                                    </button>
+                                    <button type="button" class="menu-item" data-category="images">
+                                        <span class="menu-item-icon">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                        </span>
+                                        <div class="menu-item-text">
+                                            <div class="menu-item-label">Images</div>
+                                            <div class="menu-item-sub">.jpg, .png</div>
+                                        </div>
+                                    </button>
+                                    <button type="button" class="menu-item" data-category="all">
+                                        <span class="menu-item-icon">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                        </span>
+                                        <div class="menu-item-text">
+                                            <div class="menu-item-label">All Supported Files</div>
+                                            <div class="menu-item-sub">Mix text and images</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="verifyBtn" class="btn-send" title="Run Analysis">
+                            <span>Analyze</span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <p class="input-hint">Press Enter to submit &middot; Shift+Enter for new line</p>
+            </div>
+            <input type="file" id="fileUploadDocuments" class="hidden" accept=".pdf,.docx,.txt" multiple>
+            <input type="file" id="fileUploadImages" class="hidden" accept=".jpg,.jpeg,.png" multiple>
+            <input type="file" id="fileUploadAll" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.docx,.txt" multiple>
         </div>
     </div>
 
-    <!-- Fixed Input Dock -->
-    <div class="input-dock hide-on-export">
-        <div class="input-dock-inner">
-            <div class="input-wrapper">
-                <div id="filePreviewContainer" class="file-preview-container hidden"></div>
-                <div class="input-row">
-                    <button type="button" onclick="document.getElementById('fileUpload').click()" class="attach-btn" title="Attach file">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                    </button>
-                    <input type="file" id="fileUpload" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.docx,.txt">
-                    <textarea id="inputText" rows="1" class="input-textarea custom-scrollbar" placeholder="Paste a link, upload a document, or ask 'Is this true?'..."></textarea>
-                    <button id="verifyBtn" class="send-btn" title="Verify">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-                    </button>
-                </div>
+    <!-- PDF Document (built dynamically, rendered off-screen but within viewport) -->
+    <div id="pdfDocument" style="position:fixed;top:0;left:0;width:750px;opacity:0;pointer-events:none;z-index:-1;"></div>
+
+    <div id="docModal" class="modal-overlay hidden hide-on-export">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="docModalTitle" class="modal-title">Document Preview</h3>
+                <button id="closeDocModal" class="btn-icon" title="Close Preview">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <iframe id="docModalFrame" src=""></iframe>
             </div>
         </div>
     </div>

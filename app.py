@@ -24,10 +24,12 @@ def verify_claim_route():
     data = request.json
     input_type = data.get("type", "text")
     raw_text = data.get("text", "")
-    file_data = data.get("file")
-    filename = data.get("filename", "")
+    
+    # FIX: We now look for the 'files' array sent by the updated main.js
+    files = data.get("files", [])
 
-    if not raw_text and not file_data:
+    # FIX: Check if either text or the files array exists
+    if not raw_text and not files:
         return jsonify({"error": "No input provided"}), 400
 
     def generate():
@@ -41,28 +43,38 @@ def verify_claim_route():
             if input_type == "url":
                 yield sse_message({"step": "system", "message": "Parser: Scraping content from URL..."})
                 verification_text = scrape_url(raw_text)
-            elif input_type == "document" and file_data:
-                yield sse_message({"step": "system", "message": f"Parser: Extracting text from '{filename}' via LlamaCloud..."})
-                verification_text = parse_document(file_data, filename)
+
+            # FIX: Loop through ALL uploaded documents and combine their text
+            for f in files:
+                file_type = f.get("type", "").lower()
+                if "image" not in file_type:
+                    yield sse_message({"step": "system", "message": f"Parser: Extracting text from '{f.get('name', 'document')}' via LlamaCloud..."})
+                    doc_text = parse_document(f["data"], f.get("name", ""))
+                    verification_text = f"{verification_text}\n\n{doc_text}".strip()
 
             # --- PHASE 2: MULTI-STAGE DEEPFAKE ANALYSIS PIPELINE ---
             ai_media_results = None
-            if (input_type == "image" or file_data) and "image" in str(file_data).lower():
-                yield sse_message({"step": "system", "message": "Agent 0b: Initializing 3-stage forensic pipeline..."})
+            
+            # FIX: Filter out the images from the uploaded files array
+            image_files = [f for f in files if "image" in f.get("type", "").lower()]
+            
+            if image_files:
+                # Run the deepfake forensic pipeline on the PRIMARY image
+                primary_image = image_files[0]
+                yield sse_message({"step": "system", "message": f"Agent 0b: Initializing 3-stage forensic pipeline for {primary_image.get('name', 'image')}..."})
                 
                 pipeline_messages = []
                 def pipeline_progress(msg):
                     pipeline_messages.append(msg)
                 
-                ai_media_results = analyze_image(file_data, progress_callback=pipeline_progress)
+                ai_media_results = analyze_image(primary_image["data"], progress_callback=pipeline_progress)
                 
                 for msg in pipeline_messages:
                     yield sse_message({"step": "system", "message": f"  ↳ {msg}"})
                 
-                # FIX: Decoupled Logic. Deepfake score is preserved, and text is checked independently.
                 extracted_text = ai_media_results.get("extracted_text", "").strip()
                 if extracted_text:
-                    yield sse_message({"step": "system", "message": "Triage: Text detected in image. Extracting claims for verification..."})
+                    yield sse_message({"step": "system", "message": f"Triage: Text detected in image. Extracting claims for verification..."})
                     verification_text = f"{verification_text}\n{extracted_text}".strip()
                 
                 score = ai_media_results.get('media_ai_score', 0)

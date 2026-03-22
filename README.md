@@ -11,7 +11,10 @@ An advanced, multi-agent AI pipeline designed to verify claims, debunk misinform
     * **Stage 3 (VLM Vision & OCR):** Utilizes Llama 3.2 90B Vision to act as a semantic triage agent, detecting UI elements, evaluating digital stylization, and performing highly accurate Optical Character Recognition (OCR).
 * **Multi-Agent Verification Architecture:** Uses a swarm of specialized Llama 3.3 70B agents (Router, Extractor, Researcher, Judge) to break down complex narratives into atomic claims, research them against live web data, and deliver impartial verdicts.
 * **AI Text Detection:** Analyzes the linguistic patterns (burstiness, perplexity) of extracted text to determine the probability of LLM generation.
-* **Production-Ready UI:** Features a Live Agent Terminal with Server-Sent Events (SSE) streaming, Dark/Light mode toggles, interactive pipeline breakdowns, and 1-click PDF/CSV report exports.
+* **Production-Ready UI:** Features a Live Agent Terminal with Server-Sent Events (SSE) streaming, Dark/Light mode toggles, and interactive pipeline breakdowns.
+* **Enterprise-Grade Exporting:** * **Standalone Interactive HTML:** Export a self-contained, air-gapped `.html` report containing all CSS, JS, and embedded Base64 documents. Opens in any browser as a fully interactive dashboard with clickable document previews—no internet or backend required.
+    * **True Vector PDF Export:** Utilizes native browser print engines to generate high-resolution, text-selectable, vector-based forensic PDFs.
+    * **CSV Data Export:** Instantly download a spreadsheet of all claims, verdicts, confidence scores, and citation links.
 * **Resilient API Handling:** Built with "Graceful Degradation" and "Safety Catchers" to automatically handle API timeouts, formatting hallucinations, and strict VLM privacy guardrails without crashing the user experience.
 
 ---
