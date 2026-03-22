@@ -39,15 +39,15 @@ The engine is highly capable of evaluating complex, multi-modal inputs like soci
 
 **1. Omni-Input Ingestion:**
 The user uploads a screenshot of a viral news graphic. The system instantly begins processing it through the Live Agent Terminal.
-![Omni-Input UI](assets/1.png)
+![Omni-Input UI](.assets/1.png)
 
 **2. Deepfake Analysis & OCR:**
 The pipeline evaluates the image. It successfully extracts the embedded text via OCR while simultaneously running the 3-stage deepfake analysis on the visual components.
-![Deepfake & AI Content Breakdown](assets/2.png)
+![Deepfake & AI Content Breakdown](.assets/2.png)
 
 **3. Granular Fact-Checking:**
 The extracted OCR text is broken down into verifiable claims. The Researcher Agent queries the web, and the Judge Agent delivers a cited verdict based on real-world news sources. 
-![Verification Breakdown](assets/3.png)
+![Verification Breakdown](.assets/3.png)
 
 ---
 
@@ -59,8 +59,8 @@ The extracted OCR text is broken down into verifiable claims. The Researcher Age
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/yourusername/ai-fact-checker.git](https://github.com/yourusername/ai-fact-checker.git)
-cd ai-fact-checker
+git clone https://github.com/sharad0x/Fact-Claim-Verification-System.git
+cd Fact-Claim-Verification-System
 ```
 
 ### 2. Install Dependencies
@@ -69,7 +69,7 @@ Make sure you have Pillow and numpy installed for the local forensic math engine
 pip install -r requirements.txt
 ```
 
-3. Configure Environment Variables
+### 3. Configure Environment Variables
 Create a .env file in the root directory and add your API keys.
 - NIM_API_KEY: Required for Llama 3.3 70B (Text Agents), Llama 3.2 90B (Vision Agent), and the Hive ML Classifier. Get it from [NVIDIA build](https://build.nvidia.com/).
 - LLAMA_CLOUD_API_KEY: Required for parsing PDFs and complex documents. Get it from [LlamaIndex](https://cloud.llamaindex.ai/).
