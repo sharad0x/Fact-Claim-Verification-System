@@ -39,15 +39,18 @@ The engine is highly capable of evaluating complex, multi-modal inputs like soci
 
 **1. Omni-Input Ingestion:**
 The user uploads a screenshot of a viral news graphic. The system instantly begins processing it through the Live Agent Terminal.
-![Omni-Input UI](.assets/1.png)
+<br>
+<img src="assets/1.png" alt="Omni-Input UI" width="800"/>
 
 **2. Deepfake Analysis & OCR:**
 The pipeline evaluates the image. It successfully extracts the embedded text via OCR while simultaneously running the 3-stage deepfake analysis on the visual components.
-![Deepfake & AI Content Breakdown](.assets/2.png)
+<br>
+<img src="assets/2.png" alt="Deepfake & AI Content Breakdown" width="800"/>
 
 **3. Granular Fact-Checking:**
 The extracted OCR text is broken down into verifiable claims. The Researcher Agent queries the web, and the Judge Agent delivers a cited verdict based on real-world news sources. 
-![Verification Breakdown](.assets/3.png)
+<br>
+<img src="assets/3.png" alt="Verification Breakdown" width="800"/>
 
 ---
 
