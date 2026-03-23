@@ -2,9 +2,12 @@ Flask==3.0.2
 requests==2.31.0
 python-dotenv==1.0.1
 beautifulsoup4==4.12.3
-PyPDF2==3.0.1
 llama-parse
 Pillow>=10.0.0
 numpy>=1.24.0
 pydub
-google-generativeai
+huggingface_hub
+pymupdf
+transformers
+torch
+torchaudio

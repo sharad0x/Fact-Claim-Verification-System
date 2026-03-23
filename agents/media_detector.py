@@ -1,15 +1,12 @@
-"""
-Multi-Stage Deepfake Analysis Orchestrator
-Combines 3 forensic stages into an ensemble pipeline.
-"""
 import os
 import re
 import requests
+import json
 
 from agents.image_preprocessor import preprocess_and_extract
-from agents.hive_detector import detect_with_hive
+from agents.hf_detector import detect_with_hf
 
-# ─── STAGE 3: VLM VISUAL FORENSICS ────────────────────────────
+# ─── ORIGINAL VLM (OCR & ANOMALIES) ───────────────────────────
 
 def _vlm_visual_analysis(base64_image_data, forensic_context=""):
     nim_api_key = os.getenv("NIM_API_KEY")
@@ -65,7 +62,7 @@ Rate the level of digital stylization from 0 to 100. (0 = realistic camera captu
         response.raise_for_status()
         content = response.json()['choices'][0]['message']['content']
 
-        # 1. Safety Catcher (Refined to not trigger if it actually successfully extracted text)
+        # 1. Safety Catcher
         lower_content = content.lower()
         refusals = ["i cannot", "i can't", "i'm not", "i am not", "i don't feel", "safety", "policy", "engage"]
         has_tags = "<EXTRACTED_TEXT>" in content or "**EXTRACTED_TEXT**" in content
@@ -77,7 +74,7 @@ Rate the level of digital stylization from 0 to 100. (0 = realistic camera captu
                 "confidence": "N/A", "status": "safety_block"
             }
 
-        # 2. Bulletproof Omni-Parser (Handles XML, Broken XML, Markdown, and Plain Text)
+        # 2. Bulletproof Omni-Parser
         def extract_tag(tag, text):
             match = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)
             if match: return match.group(1).strip()
@@ -103,7 +100,7 @@ Rate the level of digital stylization from 0 to 100. (0 = realistic camera captu
         score_match = re.search(r'\d+', score_str) if score_str else None
         vlm_score = int(score_match.group()) if score_match else 0
 
-        # 4. Graceful Degradation if everything fails
+        # 4. Graceful Degradation
         if not image_type and not anomalies and not extracted_text:
             return {
                 "image_type": "photograph", "extracted_text": "", "vlm_score": 0,
@@ -127,41 +124,60 @@ Rate the level of digital stylization from 0 to 100. (0 = realistic camera captu
 
     except Exception as e:
         return {"image_type": "photograph", "extracted_text": "", "vlm_score": 0, "anomalies": f"VLM analysis failed.", "confidence": "N/A", "status": "error"}
+
+# ─── STAGE 3: LLM SYNTHESIS (THE JUDGE) ─────────────────────────
+
+def _llm_synthesis(forensic_summary, hf_score, vlm_anomalies):
+    """Uses a Text LLM to weigh the mathematical forensics and VLM visual context against the HF model."""
+    nim_api_key = os.getenv("NIM_API_KEY")
+    url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {nim_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    system_prompt = """
+    You are an expert Digital Forensics Judge. Determine the final probability that an image is AI-generated (0-100).
     
-# ─── ENSEMBLE SCORING ─────────────────────────────────────────
-
-def _ensemble_score(forensic_score, hive_score, vlm_score, hive_status, vlm_status):
+    You have three pieces of evidence:
+    1. A Deepfake Detection Model Score (0-100%).
+    2. Local Mathematical Forensics (Error Level Analysis, FFT, EXIF metadata).
+    3. Visual Context (Is it a screenshot? UI elements? Stylized graphics?).
+    
+    CRITICAL RULES:
+    - Deepfake models often hallucinate "100% AI" on real photos taken of computer screens, heavily compressed memes, or edited colors. 
+    - If the deepfake model says high AI probability, BUT the visual context shows it is a UI screenshot, or EXIF data proves it's a real camera, you MUST override the model and lower the score significantly.
+    - If the evidence aligns, keep the score high/low.
+    
+    Output STRICTLY in JSON:
+    {
+      "reasoning": "A 1-2 sentence explanation of how you weighed the model vs the forensic and visual context.",
+      "final_score": <int 0-100>
+    }
     """
-    Weighted combination of all 3 stages. Never bypasses.
-    """
-    if forensic_score >= 55:
-        weights = {"hive": 0.10, "vlm": 0.20, "forensic": 0.70}
-    else:
-        weights = {"hive": 0.40, "vlm": 0.35, "forensic": 0.25}
-        
-    active = {"forensic": forensic_score}
-    if hive_status == "success": active["hive"] = hive_score
-    if vlm_status in ["success", "parse_fallback"]: active["vlm"] = vlm_score
 
-    total_active_weight = sum(weights[k] for k in active)
-    if total_active_weight > 0:
-        adj_weights = {k: weights[k] / total_active_weight for k in active}
-        ensemble = sum(adj_weights[k] * active[k] for k in active)
-    else:
-        ensemble = 0
+    payload = {
+        "model": "meta/llama-3.3-70b-instruct",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Model Score: {hf_score}%\nForensics: {forensic_summary}\nVisual Context: {vlm_anomalies}"}
+        ],
+        "temperature": 0.1,
+        "max_tokens": 256,
+        "response_format": {"type": "json_object"}
+    }
 
-    if forensic_score >= 60 and ensemble < 50:
-        ensemble = forensic_score * 0.9 
-
-    scores = list(active.values())
-    spread = max(scores) - min(scores) if len(scores) > 1 else 0
-
-    if ensemble >= 60: confidence = "High"
-    elif ensemble >= 40: confidence = "Medium"
-    elif spread > 50: confidence = "Low"
-    else: confidence = "Low" if ensemble > 20 else "High"
-
-    return int(round(ensemble)), confidence
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        result = json.loads(response.json()['choices'][0]['message']['content'])
+        return {
+            "final_score": int(result.get("final_score", hf_score)),
+            "reasoning": result.get("reasoning", "Synthesized via LLM."),
+            "status": "success"
+        }
+    except Exception as e:
+        return {"final_score": hf_score, "reasoning": "LLM Synthesis failed. Defaulting to base model.", "status": "error"}
 
 # ─── PUBLIC API: MAIN ORCHESTRATOR ─────────────────────────────
 
@@ -169,52 +185,65 @@ def analyze_image(base64_image_data, progress_callback=None):
     def _emit(msg):
         if progress_callback: progress_callback(msg)
 
-    _emit("Stage 1/3: Running local forensic analysis (ELA + FFT + Metadata)...")
+    # STAGE 1: Forensics
+    _emit("Stage 1/3: Running local forensic math (ELA + FFT + EXIF)...")
     forensic = preprocess_and_extract(base64_image_data)
-    _emit(f"Stage 1/3 complete — Forensic score: {forensic['forensic_score']}/100")
+    _emit(f"Stage 1/3 complete — Forensic Baseline: {forensic['forensic_score']}/100")
 
-    _emit("Stage 2/3: Querying Hive AI-Generated Image Detection model...")
-    hive = detect_with_hive(base64_image_data)
-    if hive["status"] == "success": _emit(f"Stage 2/3 complete — Hive score: {hive['hive_score']}/100")
-    else: _emit(f"Stage 2/3 degraded — Hive API error.")
+    # STAGE 2: HF Model
+    _emit("Stage 2/3: Querying Hugging Face Deepfake Model...")
+    hf = detect_with_hf(base64_image_data)
+    if hf["status"] == "success": 
+        _emit(f"Stage 2/3 complete — Model Raw Score: {hf['hf_score']}/100")
+    else: 
+        _emit(f"Stage 2/3 degraded — HF API error.")
 
-    _emit("Stage 3/3: Running VLM visual anomaly detection (Llama 3.2 90B Vision)...")
+    # PARALLEL: VLM Triage & OCR
+    _emit("Running VLM for OCR and Visual Anomaly Triage...")
     vlm = _vlm_visual_analysis(base64_image_data, forensic_context=forensic["summary"])
-
-    # FIX: Trigger OCR log based on text presence, not image type
     if vlm.get("extracted_text", "").strip():
         _emit("Triage: OCR Text detected. Extracting for pipeline...")
-        
-    if vlm["status"] in ["success", "parse_fallback"]:
-        _emit(f"Stage 3/3 complete — VLM anomaly score: {vlm['vlm_score']}/100")
-    elif vlm["status"] == "safety_block":
-        _emit("Stage 3/3 degraded — VLM analysis blocked by safety guardrails.")
+
+    # STAGE 3: LLM Synthesis
+    _emit("Stage 3/3: LLM Judge synthesizing final decision...")
+    # Feed the anomalies found by the VLM directly into the LLM Judge for better context
+    synthesis = _llm_synthesis(forensic["summary"], hf.get("hf_score", 0), vlm.get("anomalies", "None"))
+    final_score = synthesis["final_score"]
+    _emit(f"Stage 3/3 complete — Final Adjusted Score: {final_score}/100")
+
+    # Confidence calculation
+    if final_score >= 70 or final_score <= 30:
+        confidence = "High"
+    elif final_score >= 55 or final_score <= 45:
+        confidence = "Medium"
     else:
-        _emit(f"Stage 3/3 degraded — VLM error.")
+        confidence = "Low"
 
-    _emit("Computing ensemble score...")
-    ensemble_score, confidence = _ensemble_score(
-        forensic.get("forensic_score", 0), 
-        hive.get("hive_score", 0), 
-        vlm.get("vlm_score", 0),
-        hive.get("status", "error"), 
-        vlm.get("status", "error")
-    )
-
-    analysis_parts = [f"[ENSEMBLE: {confidence.upper()} CONFIDENCE]"]
-    if hive["status"] == "success": analysis_parts.append(f"Hive ML classifier: {hive['hive_score']}% AI probability.")
-    if vlm.get("anomalies"): analysis_parts.append(f"Visual anomalies: {vlm['anomalies']}")
-    analysis_parts.append(f"Local forensics: {forensic['summary']}")
+    analysis_parts = [f"[LLM JUDGE: {confidence.upper()} CONFIDENCE]"]
+    if vlm.get("anomalies") and "Analysis blocked" not in vlm["anomalies"]:
+        analysis_parts.append(f"Visual anomalies: {vlm['anomalies']}")
+    analysis_parts.append(synthesis["reasoning"])
 
     return {
         "image_type": vlm.get("image_type", "photograph"),
         "extracted_text": vlm.get("extracted_text", ""),
-        "media_ai_score": ensemble_score,
+        "media_ai_score": final_score,
         "confidence_level": confidence,
         "visual_analysis": " ".join(analysis_parts),
         "pipeline_details": {
-            "stage1_forensic": {"score": forensic["forensic_score"], "summary": forensic["summary"]},
-            "stage2_hive": {"score": hive["hive_score"], "status": hive["status"], "confidence": hive.get("confidence", "N/A"), "ai_prob": hive.get("ai_generated_prob", 0)},
-            "stage3_vlm": {"score": vlm["vlm_score"], "anomalies": vlm.get("anomalies", ""), "status": vlm.get("status", "unknown")}
+            "stage1_forensic": {
+                "score": forensic["forensic_score"], 
+                "summary": forensic["summary"]
+            },
+            "stage2_hf": {
+                "score": hf.get("hf_score", 0), 
+                "status": hf.get("status", "error"), 
+                "summary": "prithivMLmods/Deep-Fake-Detector-v2"
+            },
+            "stage3_synthesis": {
+                "score": final_score,
+                "summary": synthesis["reasoning"],
+                "status": synthesis["status"]
+            }
         }
     }

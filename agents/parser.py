@@ -1,6 +1,7 @@
 import os
 import base64
 import tempfile
+import fitz
 import requests
 from bs4 import BeautifulSoup
 from llama_parse import LlamaParse
@@ -25,17 +26,14 @@ def scrape_url(url):
         raise ValueError(f"Could not extract content from URL: {str(e)}")
 
 def parse_document(base64_file, filename):
-    """Uses LlamaCloud (LlamaParse) to extract text from PDFs/Docs."""
+    """Uses LlamaCloud for text extraction and PyMuPDF to extract embedded images."""
     try:
-        # Decode the base64 string from the frontend
         if "," in base64_file:
             header, encoded = base64_file.split(",", 1)
         else:
             encoded = base64_file
             
         file_bytes = base64.b64decode(encoded)
-        
-        # Determine extension and create a temporary file for LlamaParse
         ext = os.path.splitext(filename)[1] or ".pdf"
         
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_file:
@@ -43,25 +41,43 @@ def parse_document(base64_file, filename):
             temp_path = temp_file.name
 
         try:
-            # Initialize LlamaParse
+            # 1. Extract Text via LlamaParse
             parser = LlamaParse(
                 api_key=os.getenv("LLAMA_CLOUD_API_KEY"),
                 result_type="markdown",
                 verbose=True
             )
-            
-            # Parse the document
             documents = parser.load_data(temp_path)
-            
-            # Combine all pages into one string
             extracted_text = "\n\n".join([doc.text for doc in documents])
-            return extracted_text
+            
+            # 2. Extract Images via PyMuPDF (If it is a PDF)
+            extracted_images = []
+            if ext.lower() == ".pdf":
+                pdf_doc = fitz.open(temp_path)
+                for page_num in range(len(pdf_doc)):
+                    page = pdf_doc.load_page(page_num)
+                    image_list = page.get_images(full=True)
+                    
+                    for img_index, img in enumerate(image_list):
+                        xref = img[0]
+                        base_image = pdf_doc.extract_image(xref)
+                        image_bytes = base_image["image"]
+                        image_ext = base_image["ext"]
+                        
+                        # Convert to base64 data URI format expected by the pipeline
+                        b64 = base64.b64encode(image_bytes).decode("utf-8")
+                        extracted_images.append({
+                            "name": f"{filename}_Page{page_num+1}_Img{img_index+1}.{image_ext}",
+                            "type": f"image/{image_ext}",
+                            "data": f"data:image/{image_ext};base64,{b64}"
+                        })
+                pdf_doc.close()
+
+            return extracted_text, extracted_images
             
         finally:
-            # Clean up the temporary file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-                
     except Exception as e:
-        print(f"Document Parsing Error: {e}")
-        raise ValueError(f"Failed to parse document using LlamaCloud: {str(e)}")
+            print(f"Document Parsing Error: {e}")   
+            raise ValueError(f"Failed to parse document: {str(e)}")

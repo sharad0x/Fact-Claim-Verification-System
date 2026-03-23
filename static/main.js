@@ -526,172 +526,96 @@ function handleStreamData(data) {
     }
 }
 
-// ── REUSABLE UI POPULATOR ──
 function populateReportUI(data) {
-    window.currentLiveDocs = {}; // Reset global doc store for modals
+    window.currentLiveDocs = {}; 
+    
+    // 1. Update Core Stats
     document.getElementById('statTotal').innerText = data.results.length;
     document.getElementById('statTrue').innerText = data.results.filter(r => r.verdict === 'True').length;
     document.getElementById('statFalse').innerText = data.results.filter(r => r.verdict === 'False').length;
     document.getElementById('statMixed').innerText = data.results.filter(r => r.verdict === 'Partially True' || r.verdict === 'Unverifiable').length;
 
+    // 2. Handle AI Text Detection Card
+    const aiTextCard = document.getElementById('aiDetectionCard');
     if (data.ai_text_detection && data.ai_text_detection.ai_probability_score > 0) {
-        document.getElementById('aiDetectionCard').classList.remove('hidden');
+        aiTextCard.classList.remove('hidden');
         document.getElementById('aiAnalysisText').innerText = data.ai_text_detection.analysis;
         document.getElementById('aiScoreBadge').innerText = `${data.ai_text_detection.ai_probability_score}%`;
     } else {
-        document.getElementById('aiDetectionCard').classList.add('hidden');
+        aiTextCard.classList.add('hidden');
     }
     
-    const mediaCard = document.getElementById('mediaDetectionCard');
-    const pipelineBreakdown = document.getElementById('pipelineBreakdown');
-    
-    if (data.ai_media_detection) {
-        mediaCard.classList.remove('hidden');
-        document.getElementById('mediaAnalysisText').innerText = data.ai_media_detection.visual_analysis;
-        
-        // Check if it's audio or image to update the Card Title dynamically
-        const isAudio = data.ai_media_detection.media_type === "audio";
-        mediaCard.querySelector('.detection-title').innerText = isAudio ? "Voice Deepfake Analysis" : "Deepfake Forensic Analysis";
-        
-        // FIX 1: Dynamically update the Pipeline Stage Names based on the media type
-        const stage1Title = document.querySelector('#stageForensic .stage-name');
-        const stage2Title = document.querySelector('#stageHive .stage-name');
-        const stage3Title = document.querySelector('#stageVLM .stage-name');
-        
-        if (isAudio) {
-            if (stage1Title) stage1Title.innerText = "Stage 1: Acoustic Extraction";
-            if (stage2Title) stage2Title.innerText = "Stage 2: Hugging Face Inference";
-            if (stage3Title) stage3Title.innerText = "Stage 3: Voice Anomaly Scoring";
-        } else {
-            if (stage1Title) stage1Title.innerText = "Stage 1: Local Forensics";
-            if (stage2Title) stage2Title.innerText = "Stage 2: Hive ML Classifier";
-            if (stage3Title) stage3Title.innerText = "Stage 3: VLM Vision";
-        }
-        
-        document.getElementById('mediaScoreBadge').innerText = `${data.ai_media_detection.media_ai_score}%`;
-        
-        const details = data.ai_media_detection.pipeline_details;
-        if (details) {
-            pipelineBreakdown.classList.remove('hidden');
+    // 3. Clear and Rebuild Deepfake Media Cards
+    const detectionRow = document.querySelector('.detection-row');
+    // Delete only the cards with class 'deepfake' to keep the 'ai-text' card intact
+    document.querySelectorAll('.detection-card.deepfake').forEach(el => el.remove());
+
+    if (data.ai_media_detection && Array.isArray(data.ai_media_detection)) {
+        data.ai_media_detection.forEach((media) => {
+            const isAudio = media.media_type === "audio";
+            const title = isAudio ? "Voice Deepfake Analysis" : "Deepfake Forensic Analysis";
+            const fileTag = media.filename ? `<div style="font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 8px; font-weight: 600;">File: ${media.filename}</div>` : '';
             
-            // --- NEW: COLLAPSED 1-STAGE UI FOR AUDIO ---
-            if (isAudio) {
-                // Show only Stage 1 and hide the others
-                document.getElementById('stageForensic').classList.remove('hidden');
-                document.getElementById('stageHive').classList.add('hidden');
-                document.getElementById('stageVLM').classList.add('hidden');
-                
-                const s1 = details.stage1_llm;
-                if (s1) {
-                    document.querySelector('#stageForensic .stage-name').innerText = "Stage 1: Multimodal LLM Analysis";
-                    document.getElementById('scoreForensic').innerText = `${s1.score}/100`;
-                    document.getElementById('fillForensic').style.width = `${s1.score}%`;
-                    document.getElementById('fillForensic').style.background = getScoreGradient(s1.score);
-                    document.getElementById('detailForensic').innerText = s1.summary;
-                }
-            } 
-            // --- EXISTING: 3-STAGE UI FOR IMAGES ---
-            else {
-                document.getElementById('stageForensic').classList.remove('hidden');
-                document.getElementById('stageHive').classList.remove('hidden');
-                document.getElementById('stageVLM').classList.remove('hidden');
-                
-                document.querySelector('#stageForensic .stage-name').innerText = "Stage 1: Local Forensics";
-                const s1 = details.stage1_forensic;
-                if (s1) {
-                    document.getElementById('scoreForensic').innerText = `${s1.score}/100`;
-                    document.getElementById('fillForensic').style.width = `${s1.score}%`;
-                    document.getElementById('fillForensic').style.background = getScoreGradient(s1.score);
-                    document.getElementById('detailForensic').innerText = s1.summary || 'ELA + FFT + Metadata';
-                }
-                
-                const s2 = details.stage2_hive;
-                if (s2) {
-                    document.getElementById('scoreHive').innerText = s2.status === 'success' ? `${s2.score}/100` : 'Error';
-                    document.getElementById('fillHive').style.width = s2.status === 'success' ? `${s2.score}%` : '0%';
-                    document.getElementById('fillHive').style.background = getScoreGradient(s2.score);
-                    
-                    let cleanStatus = s2.status;
-                    if (cleanStatus && cleanStatus !== 'success' && cleanStatus.length > 45) {
-                        cleanStatus = "API Timeout or Connection Dropped.";
-                    }
-                    
-                    document.getElementById('detailHive').innerText = s2.status === 'success' 
-                        ? `AI prob: ${(s2.ai_prob * 100).toFixed(1)}% | Confidence: ${s2.confidence}`
-                        : `Status: ${cleanStatus}`;
-                }
-                
-                const s3 = details.stage3_vlm;
-                if (s3) {
-                    const vlmOk = (s3.status === 'success' || s3.status === 'parse_fallback' || s3.status === 'safety_block');
-                    document.getElementById('scoreVLM').innerText = vlmOk ? `${s3.score}/100` : 'Error';
-                    document.getElementById('fillVLM').style.width = vlmOk ? `${s3.score}%` : '0%';
-                    document.getElementById('fillVLM').style.background = getScoreGradient(s3.score);
-                    document.getElementById('detailVLM').innerText = s3.anomalies || 'Visual Anomaly Detection';
-                }
+            let pipelineHTML = '';
+            if (media.pipeline_details) {
+                // Map stages based on file type
+                const s1 = isAudio ? media.pipeline_details.stage1_acoustic : media.pipeline_details.stage1_forensic;
+                const s2 = media.pipeline_details.stage2_hf || media.pipeline_details.stage2_hive;
+                const s3 = media.pipeline_details.stage3_synthesis || media.pipeline_details.stage3_vlm;
+
+                pipelineHTML = `
+                <div class="pipeline-breakdown">
+                    <button class="pipeline-toggle-btn" onclick="this.nextElementSibling.classList.toggle('hidden'); this.querySelector('.chevron-icon').classList.toggle('rotate-180');">
+                        <span class="pipeline-heading">Pipeline Breakdown</span>
+                        <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="pipeline-stages hidden">
+                        ${s1 ? `<div class="pipeline-stage"><div class="stage-header"><span class="stage-name">${isAudio ? 'Acoustics' : 'Forensics'}</span><span class="stage-score">${s1.score}/100</span></div><div class="stage-bar"><div class="stage-fill" style="width:${s1.score}%; background:${getScoreGradient(s1.score)};"></div></div></div>` : ''}
+                        ${s2 ? `<div class="pipeline-stage"><div class="stage-header"><span class="stage-name">${isAudio ? 'Voice Model' : 'HF Inference'}</span><span class="stage-score">${s2.score}/100</span></div><div class="stage-bar"><div class="stage-fill" style="width:${s2.score}%; background:${getScoreGradient(s2.score)};"></div></div></div>` : ''}
+                        ${s3 ? `<div class="pipeline-stage"><div class="stage-header"><span class="stage-name">Decision Layer</span><span class="stage-score">${s3.score}/100</span></div><div class="stage-bar"><div class="stage-fill" style="width:${s3.score}%; background:${getScoreGradient(s3.score)};"></div></div></div>` : ''}
+                    </div>
+                </div>`;
             }
-        } else {
-            pipelineBreakdown.classList.add('hidden');
-        }
-        
-    } else {
-        mediaCard.classList.add('hidden');
-        pipelineBreakdown.classList.add('hidden');
+
+            const mediaCardHTML = `
+            <div class="detection-card deepfake">
+                <div class="detection-info">
+                    <h3 class="detection-title">${title}</h3>
+                    ${fileTag}
+                    <p class="detection-text">${media.visual_analysis || "No anomalies detected."}</p>
+                </div>
+                <span class="score-badge">${media.media_ai_score}%</span>
+                ${pipelineHTML}
+            </div>`;
+            detectionRow.insertAdjacentHTML('beforeend', mediaCardHTML);
+        });
     }
 
+    // 4. Update Original Source Display
     const inputDisplay = document.getElementById('originalInputDisplay');
     inputDisplay.innerHTML = '';
-
     const mediaContainer = document.createElement('div');
 
-    if (data.images && data.images.length > 0) {
-        data.images.forEach(imgData => {
-            const img = document.createElement('img');
-            img.src = imgData;
-            img.style.maxWidth = '250px';
-            img.style.maxHeight = '250px';
-            img.style.marginRight = '12px';
-            img.style.marginBottom = '12px';
-            img.style.display = 'inline-block';
-            img.style.borderRadius = '8px';
-            img.style.border = '1px solid var(--border)';
-            mediaContainer.appendChild(img);
-        });
-    }
+    if (data.images) data.images.forEach(imgData => {
+        const img = document.createElement('img');
+        img.src = imgData;
+        img.style.maxWidth = '200px'; img.style.borderRadius = '8px'; img.style.margin = '0 10px 10px 0';
+        mediaContainer.appendChild(img);
+    });
 
-    // Update the docCard creation block to look exactly like this:
-    if (data.documents && data.documents.length > 0) {
-        data.documents.forEach(doc => {
-            // Save the huge base64 string to a global dictionary instead of inline HTML
-            window.currentLiveDocs[doc.name] = doc.data;
-            
-            const docCard = document.createElement('div');
-            docCard.className = 'doc-preview-card clickable';
-            
-            // FIX 2: Use setAttribute so the click handler survives cloneNode(true) during HTML Export
-            docCard.setAttribute('onclick', `openDocModal('${doc.name}')`);
-            
-            docCard.innerHTML = `
-                <div class="doc-preview-icon">📄</div>
-                <div class="doc-preview-info">
-                    <div class="doc-preview-name">${doc.name}</div>
-                    <div class="doc-preview-type">${doc.type ? doc.type.split('/')[1] || 'Document' : 'Document'}</div>
-                </div>
-            `;
-            mediaContainer.appendChild(docCard);
-        });
-    }
+    if (data.documents) data.documents.forEach(doc => {
+        window.currentLiveDocs[doc.name] = doc.data;
+        const docCard = document.createElement('div');
+        docCard.className = 'doc-preview-chip clickable';
+        docCard.setAttribute('onclick', `openDocModal('${doc.name}')`);
+        docCard.innerHTML = `<span style="margin-right:8px;">📄</span>${doc.name}`;
+        mediaContainer.appendChild(docCard);
+    });
 
-    if (mediaContainer.childNodes.length > 0) {
-        inputDisplay.appendChild(mediaContainer);
-    }
-
+    inputDisplay.appendChild(mediaContainer);
     const textPara = document.createElement('p');
-    // Prevent duplicating filenames in text if no custom prompt was typed
-    if (!data.documents || data.documents.length === 0 || data.originalInput !== data.documents.map(d=>d.name).join(', ')) {
-        textPara.innerText = data.originalInput;
-        inputDisplay.appendChild(textPara);
-    }
+    textPara.innerText = data.originalInput;
+    inputDisplay.appendChild(textPara);
     
     renderResults(data.results);
 }
@@ -773,37 +697,47 @@ document.getElementById('exportPdfBtn').addEventListener('click', () => {
     const credScore = total > 0 ? Math.round((trueCount / total) * 100) : 0;
     
     const srcEl     = document.getElementById('originalInputDisplay');
-    // Extract paragraph text but safely ignore the visual cards
     const sourceTextPara = srcEl ? srcEl.querySelector('p') : null;
-    const sourceText = sourceTextPara ? sourceTextPara.innerText.trim().substring(0, 400) : '';
+    const sourceText = sourceTextPara ? sourceTextPara.innerText.trim().substring(0, 500) : '';
 
-    // FIX: Extract Images AND Document Chips for the PDF
     let pdfMediaHtml = '';
     if (srcEl) {
         const imgs = srcEl.querySelectorAll('img');
         imgs.forEach(img => {
-            pdfMediaHtml += `<img src="${img.src}" style="max-height:200px; max-width:100%; border-radius:6px; margin-right:10px; margin-bottom:10px; display:inline-block; vertical-align:middle;">`;
+            pdfMediaHtml += `<img src="${img.src}" style="max-height:200px; max-width:100%; border-radius:10px; margin: 0 12px 12px 0; border:1px solid #1e2d42;">`;
         });
 
         const docs = srcEl.querySelectorAll('.doc-preview-card');
         docs.forEach(doc => {
             const name = doc.querySelector('.doc-preview-name').innerText;
             pdfMediaHtml += `
-            <div style="display:inline-flex; align-items:center; background:#1a1f35; border:1px solid #2d3561; border-radius:6px; padding:10px 14px; margin-right:10px; margin-bottom:10px; vertical-align:middle;">
-                <span style="font-size:18px; margin-right:10px;">📄</span>
-                <span style="font-size:10px; color:#e8edf5; font-weight:700; font-family:sans-serif;">${name}</span>
+            <div style="display:inline-block; background:#1a1f35; border:1px solid #2d3561; border-radius:8px; padding:12px 16px; margin: 0 12px 12px 0; vertical-align:top;">
+                <span style="font-size:24px; vertical-align:middle; margin-right:8px;">📄</span>
+                <span style="font-size:14px; color:#e8edf5; font-weight:700; font-family:sans-serif;">${name}</span>
             </div>`;
         });
     }
 
-    const aiCard    = document.getElementById('aiDetectionCard');
-    const mediaCard = document.getElementById('mediaDetectionCard');
-    const showAI    = aiCard    && !aiCard.classList.contains('hidden');
-    const showMedia = mediaCard && !mediaCard.classList.contains('hidden');
-    const aiScore   = (document.getElementById('aiScoreBadge')    || {}).innerText || '';
-    const aiText    = (document.getElementById('aiAnalysisText')   || {}).innerText || '';
-    const mediaScore= (document.getElementById('mediaScoreBadge') || {}).innerText || '';
-    const mediaText = (document.getElementById('mediaAnalysisText')|| {}).innerText || '';
+    // Process deepfake results
+    const mediaArray = Array.isArray(globalResultsData.ai_media_detection) ? globalResultsData.ai_media_detection : (globalResultsData.ai_media_detection ? [globalResultsData.ai_media_detection] : []);
+    let mediaBoxesHTML = '';
+    
+    // We fetch from the live DOM to ensure we get the latest LLM reasoning strings
+    const deepfakeCards = document.querySelectorAll('.detection-card.deepfake');
+    deepfakeCards.forEach(card => {
+        const score = card.querySelector('.score-badge').innerText;
+        const text = card.querySelector('.detection-text').innerText;
+        const title = card.querySelector('.detection-title').innerText;
+        const fileTagEl = card.querySelector('.detection-info div[style*="font-size: 0.75rem"]');
+        const fileTag = fileTagEl ? ` - ${fileTagEl.innerText}` : '';
+
+        mediaBoxesHTML += `
+        <div style="background:#0f1623; border:1px solid #1e2d42; border-top:4px solid #c084fc; border-radius:10px; padding:20px; margin-bottom:20px; page-break-inside: avoid;">
+            <div style="font-size:12px; font-weight:700; color:#c084fc; text-transform:uppercase; margin-bottom:10px;">${title}${fileTag}</div>
+            <div style="font-size:32px; font-weight:900; color:#c084fc; font-family:monospace; margin-bottom:8px;">${score}</div>
+            <div style="font-size:14px; color:#a8b4c8; line-height:1.6;">${text}</div>
+        </div>`;
+    });
 
     function vc(v) {
         if (v === 'True')           return { border:'#16a34a', text:'#4ade80', bg:'#0d2b1a', label:'VERIFIED TRUE' };
@@ -815,163 +749,116 @@ document.getElementById('exportPdfBtn').addEventListener('click', () => {
     const credColor = credScore >= 80 ? '#4ade80' : credScore >= 50 ? '#fbbf24' : '#f87171';
     const credLabel = credScore >= 80 ? 'HIGH CREDIBILITY' : credScore >= 50 ? 'MODERATE CREDIBILITY' : 'LOW CREDIBILITY';
 
-    function scoreBar(pct, color) {
-        const filled = Math.round(pct / 5);
-        let s = '';
-        for (let i = 0; i < 20; i++) {
-            s += '<span style="display:inline-block;width:18px;height:7px;margin-right:2px;border-radius:2px;background:'
-               + (i < filled ? color : '#1e2d42') + ';vertical-align:middle;"></span>';
-        }
-        return s;
-    }
-
-    function statCell(val, label, color) {
-        return '<td style="width:33%;padding:0 4px;">'
-             + '<div style="background:#080c14;border:1px solid #1e2d42;border-radius:6px;padding:10px 8px;text-align:center;">'
-             + '<div style="font-size:20px;font-weight:900;color:' + color + ';font-family:monospace;">' + val + '</div>'
-             + '<div style="font-size:7.5px;color:#4a5568;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;">' + label + '</div>'
-             + '</div></td>';
-    }
-
-    var claimsHTML = '';
-    globalResultsData.forEach(function(r, i) {
-        var v    = vc(r.verdict);
-        var srcs = (r.citations || []).slice(0, 3).map(function(u) {
-            return '<div style="font-size:8px;color:#60a5fa;margin-top:3px;word-break:break-all;">' + u + '</div>';
-        }).join('');
-        claimsHTML +=
-            '<div style="page-break-inside: avoid; break-inside: avoid; background:#0f1623;border:1px solid #1e2d42;border-left:3px solid ' + v.border + ';border-radius:6px;padding:14px 16px;margin-bottom:10px;">'
-          + '<table style="width:100%;border-collapse:collapse;margin-bottom:8px;"><tr>'
-          + '<td style="font-size:9px;color:#6b7a90;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Claim #' + (i+1) + '</td>'
-          + '<td style="text-align:right;"><span style="background:' + v.bg + ';border:1px solid ' + v.border + ';color:' + v.text + ';font-size:7.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:3px 9px;border-radius:20px;">' + v.label + '</span></td>'
-          + '</tr></table>'
-          + '<div style="font-size:11.5px;font-weight:700;color:#e8edf5;line-height:1.5;margin-bottom:9px;">&ldquo;' + r.claim + '&rdquo;</div>'
-          + '<div style="background:#080c14;border-left:2px solid #6366f1;padding:9px 11px;border-radius:0 4px 4px 0;margin-bottom:9px;">'
-          + '<div style="font-size:7.5px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Evidence Context</div>'
-          + '<div style="font-size:9.5px;color:#a8b4c8;line-height:1.6;font-style:italic;">' + (r.evidence_context || '&mdash;') + '</div>'
-          + '</div>'
-          + '<div style="font-size:9.5px;color:#a8b4c8;line-height:1.6;' + (srcs ? 'margin-bottom:8px;' : '') + '">' + (r.reasoning || '') + '</div>'
-          + (srcs ? '<div style="border-top:1px solid #1e2d42;padding-top:7px;"><div style="font-size:7.5px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Sources</div>' + srcs + '</div>' : '')
-          + '</div>';
+    let claimsHTML = '';
+    globalResultsData.forEach((r, i) => {
+        const v = vc(r.verdict);
+        const srcs = (r.citations || []).slice(0, 3).map(u => 
+            `<div style="font-size:12px; color:#60a5fa; margin-top:5px; word-break:break-all;">${u}</div>`
+        ).join('');
+        
+        claimsHTML += `
+            <div style="page-break-inside: avoid; background:#0f1623; border:1px solid #1e2d42; border-left:5px solid ${v.border}; border-radius:10px; padding:24px; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <span style="font-size:14px; color:#6b7a90; font-weight:700; text-transform:uppercase;">Claim #${i+1}</span>
+                    <span style="background:${v.bg}; border:1px solid ${v.border}; color:${v.text}; font-size:12px; font-weight:800; padding:4px 14px; border-radius:20px;">${v.label}</span>
+                </div>
+                <div style="font-size:18px; font-weight:700; color:#e8edf5; line-height:1.4; margin-bottom:15px;">"${r.claim}"</div>
+                <div style="background:#080c14; border-left:3px solid #6366f1; padding:15px; border-radius:0 6px 6px 0; margin-bottom:15px;">
+                    <div style="font-size:11px; font-weight:700; color:#4a5568; text-transform:uppercase; margin-bottom:5px;">Evidence Context</div>
+                    <div style="font-size:14px; color:#a8b4c8; font-style:italic;">${r.evidence_context || 'N/A'}</div>
+                </div>
+                <div style="font-size:15px; color:#a8b4c8; line-height:1.6; margin-bottom:15px;">${r.reasoning}</div>
+                ${srcs ? `<div style="border-top:1px solid #1e2d42; padding-top:12px;"><div style="font-size:11px; font-weight:700; color:#4a5568; text-transform:uppercase; margin-bottom:6px;">Sources</div>${srcs}</div>` : ''}
+            </div>`;
     });
 
-    var detHTML = '';
-    if (showAI || showMedia) {
-        var aiBox = showAI
-            ? '<div style="background:#0f1623;border:1px solid #1e2d42;border-top:2px solid #60a5fa;border-radius:6px;padding:12px;">'
-            + '<div style="font-size:8px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">AI Content Analysis</div>'
-            + '<div style="font-size:20px;font-weight:900;color:#60a5fa;font-family:monospace;margin-bottom:5px;">' + aiScore + '</div>'
-            + '<div style="font-size:8.5px;color:#6b7a90;line-height:1.5;">' + aiText + '</div>'
-            + '</div>' : '';
-        var mediaBox = showMedia
-            ? '<div style="background:#0f1623;border:1px solid #1e2d42;border-top:2px solid #c084fc;border-radius:6px;padding:12px;">'
-            + '<div style="font-size:8px;font-weight:700;color:#c084fc;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Deepfake Forensic Analysis</div>'
-            + '<div style="font-size:20px;font-weight:900;color:#c084fc;font-family:monospace;margin-bottom:5px;">' + mediaScore + '</div>'
-            + '<div style="font-size:8.5px;color:#6b7a90;line-height:1.5;">' + mediaText + '</div>'
-            + '</div>' : '';
+    const htmlString = `
+    <div style="background:#080c14; color:#e8edf5; font-family:Arial, sans-serif; padding:50px; width:1000px; margin:0 auto;">
+        <div style="border-bottom:2px solid #1e2d42; padding-bottom:30px; margin-bottom:40px; display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+                <div style="background:#1a1f35; border:1px solid #2d3561; border-radius:20px; display:inline-block; padding:6px 16px; margin-bottom:20px;">
+                    <span style="font-size:12px; font-weight:700; color:#818cf8; text-transform:uppercase; letter-spacing:0.1em;">AI FORENSIC ENGINE &middot; VERIFIED</span>
+                </div>
+                <div style="font-size:38px; font-weight:900; color:#f0f4ff; line-height:1.1; margin-bottom:10px;">Forensic Verification Report</div>
+                <div style="font-size:15px; color:#6b7a90;">Automated Multi-Agent Intelligence Extraction</div>
+            </div>
+            <div style="background:#0f1623; border:1px solid #1e2d42; border-radius:10px; padding:20px; min-width:220px;">
+                <div style="font-size:11px; color:#4a5568; text-transform:uppercase; margin-bottom:5px;">Report ID</div>
+                <div style="font-size:15px; font-weight:700; color:#818cf8; font-family:monospace; margin-bottom:15px;">${reportId}</div>
+                <div style="font-size:11px; color:#4a5568; text-transform:uppercase; margin-bottom:5px;">Timestamp</div>
+                <div style="font-size:13px; font-weight:600; color:#a8b4c8;">${dateStr}</div>
+                <div style="font-size:12px; color:#6b7a90;">${timeStr}</div>
+            </div>
+        </div>
 
-        var detCols = (showAI && showMedia)
-            ? '<table style="width:100%;border-collapse:collapse;"><tr>'
-            + '<td style="width:50%;padding-right:6px;vertical-align:top;">' + aiBox + '</td>'
-            + '<td style="width:50%;padding-left:6px;vertical-align:top;">' + mediaBox + '</td>'
-            + '</tr></table>'
-            : (aiBox || mediaBox);
+        <div style="background:#0f1623; border:1px solid #1e2d42; border-radius:15px; padding:35px; margin-bottom:40px; display:flex; gap:40px; align-items:center; page-break-inside: avoid;">
+            <div style="text-align:center; min-width:250px; border-right:1px solid #1e2d42; padding-right:40px;">
+                <div style="font-size:13px; font-weight:700; color:#4a5568; text-transform:uppercase; margin-bottom:10px;">Credibility Score</div>
+                <div style="font-size:82px; font-weight:900; color:${credColor}; font-family:monospace; line-height:1;">${credScore}%</div>
+                <div style="font-size:14px; font-weight:800; color:${credColor}; text-transform:uppercase; margin-top:10px; letter-spacing:0.05em;">${credLabel}</div>
+            </div>
+            <div style="flex:1;">
+                <div style="display:flex; gap:15px; margin-top:10px;">
+                    <div style="flex:1; background:#080c14; border:1px solid #1e2d42; border-radius:10px; padding:15px; text-align:center;">
+                        <div style="font-size:32px; font-weight:900; color:#4ade80; font-family:monospace;">${trueCount}</div>
+                        <div style="font-size:11px; color:#4a5568; text-transform:uppercase;">True</div>
+                    </div>
+                    <div style="flex:1; background:#080c14; border:1px solid #1e2d42; border-radius:10px; padding:15px; text-align:center;">
+                        <div style="font-size:32px; font-weight:900; color:#f87171; font-family:monospace;">${falseCount}</div>
+                        <div style="font-size:11px; color:#4a5568; text-transform:uppercase;">False</div>
+                    </div>
+                    <div style="flex:1; background:#080c14; border:1px solid #1e2d42; border-radius:10px; padding:15px; text-align:center;">
+                        <div style="font-size:32px; font-weight:900; color:#fbbf24; font-family:monospace;">${mixedCount}</div>
+                        <div style="font-size:11px; color:#4a5568; text-transform:uppercase;">Mixed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-        detHTML = '<div style="page-break-inside: avoid; break-inside: avoid; margin-bottom:20px;">'
-                + '<div style="font-size:10px;font-weight:800;color:#e8edf5;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #1e2d42;">Forensic Detection Analysis</div>'
-                + detCols
-                + '</div>';
-    }
+        <div style="background:#0f1623; border:1px solid #1e2d42; border-left:6px solid #6366f1; border-radius:0 12px 12px 0; padding:25px; margin-bottom:40px; page-break-inside: avoid;">
+            <div style="font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; margin-bottom:15px;">Original Data Analyzed</div>
+            <div style="margin-bottom:20px;">${pdfMediaHtml}</div>
+            <div style="font-size:16px; color:#a8b4c8; line-height:1.7; font-style:italic;">${sourceText}...</div>
+        </div>
 
-    var html =
-        '<div style="background:#080c14;color:#e8edf5;font-family:Arial,Helvetica,sans-serif;width:100%;max-width:800px;margin:0 auto;padding:0;">'
-      + '<div style="background:#0d1117;border-bottom:1px solid #1e2d42;padding:28px 34px 22px;">'
-      + '<table style="width:100%;border-collapse:collapse;"><tr>'
-      + '<td style="vertical-align:top;">'
-      + '<div style="background:#1a1f35;border:1px solid #2d3561;border-radius:20px;display:inline-block;padding:4px 12px;margin-bottom:10px;">'
-      + '<span style="font-size:8px;font-weight:700;color:#818cf8;letter-spacing:0.1em;text-transform:uppercase;">AI FORENSIC ENGINE &middot; CONFIDENTIAL</span>'
-      + '</div>'
-      + '<div style="font-size:22px;font-weight:900;color:#f0f4ff;letter-spacing:-0.02em;line-height:1.15;margin-bottom:5px;">Forensic Verification<br>Intelligence Report</div>'
-      + '<div style="font-size:9px;color:#6b7a90;letter-spacing:0.02em;">Multi-Agent Claim Analysis &amp; Credibility Assessment</div>'
-      + '</td>'
-      + '<td style="vertical-align:top;text-align:right;width:175px;">'
-      + '<div style="background:#080c14;border:1px solid #1e2d42;border-radius:6px;padding:10px 14px;display:inline-block;text-align:left;">'
-      + '<div style="font-size:7.5px;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Report ID</div>'
-      + '<div style="font-size:10px;font-weight:700;color:#818cf8;font-family:monospace;margin-bottom:8px;">' + reportId + '</div>'
-      + '<div style="font-size:7.5px;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Generated</div>'
-      + '<div style="font-size:9px;font-weight:600;color:#a8b4c8;">' + dateStr + '</div>'
-      + '<div style="font-size:8px;color:#6b7a90;">' + timeStr + '</div>'
-      + '</div>'
-      + '</td>'
-      + '</tr></table>'
-      + '<div style="height:2px;background:#1e2d42;margin-top:18px;border-radius:1px;">'
-      + '<div style="height:2px;width:35%;background:#6366f1;border-radius:1px;"></div>'
-      + '</div>'
-      + '</div>'
+        <div style="margin-bottom:40px;">
+            <div style="font-size:16px; font-weight:800; color:#e8edf5; text-transform:uppercase; margin-bottom:20px; padding-bottom:10px; border-bottom:1px solid #1e2d42;">Forensic Detection Suite</div>
+            <div style="display:flex; gap:25px; align-items:flex-start;">
+                ${showAI ? `
+                <div style="flex:1; background:#0f1623; border:1px solid #1e2d42; border-top:4px solid #60a5fa; border-radius:10px; padding:20px;">
+                    <div style="font-size:12px; font-weight:700; color:#60a5fa; text-transform:uppercase; margin-bottom:10px;">AI Content Analysis</div>
+                    <div style="font-size:32px; font-weight:900; color:#60a5fa; font-family:monospace; margin-bottom:8px;">${aiScore}</div>
+                    <div style="font-size:14px; color:#6b7a90; line-height:1.6;">${aiText}</div>
+                </div>` : ''}
+                <div style="flex:1;">${mediaBoxesHTML}</div>
+            </div>
+        </div>
 
-      + '<div style="padding:22px 34px 34px;">'
-
-      + '<div style="page-break-inside: avoid; break-inside: avoid; background:#0f1623;border:1px solid #1e2d42;border-radius:8px;padding:18px 20px;margin-bottom:18px;">'
-      + '<table style="width:100%;border-collapse:collapse;"><tr>'
-      + '<td style="vertical-align:middle;width:190px;">'
-      + '<div style="font-size:8px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;">Overall Credibility Score</div>'
-      + '<div style="font-size:42px;font-weight:900;color:' + credColor + ';font-family:monospace;line-height:1;letter-spacing:-0.02em;">' + credScore + '<span style="font-size:18px;">%</span></div>'
-      + '<div style="font-size:8px;font-weight:800;color:' + credColor + ';letter-spacing:0.1em;text-transform:uppercase;margin-top:4px;">' + credLabel + '</div>'
-      + '</td>'
-      + '<td style="vertical-align:middle;padding-left:18px;">'
-      + '<div style="margin-bottom:10px;">' + scoreBar(credScore, credColor) + '</div>'
-      + '<table style="width:100%;border-collapse:collapse;"><tr>'
-      + statCell(trueCount,  'True',  '#4ade80')
-      + statCell(falseCount, 'False', '#f87171')
-      + statCell(mixedCount, 'Mixed', '#fbbf24')
-      + '</tr></table>'
-      + '</td>'
-      + '</tr></table>'
-      + '</div>'
-
-      // FIX: Inject BOTH the extracted images and the newly styled PDF Document Chips 
-      + '<div style="page-break-inside: avoid; break-inside: avoid; background:#0f1623;border:1px solid #1e2d42;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:18px;">'
-      + '<div style="font-size:7.5px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;">Source Analysed</div>'
-      + (pdfMediaHtml ? `<div style="margin-bottom:10px;">${pdfMediaHtml}</div>` : '')
-      + (sourceText ? `<div style="font-size:9.5px;color:#a8b4c8;line-height:1.6;font-style:italic;">${sourceText}${sourceText.length >= 400 ? '&hellip;' : ''}</div>` : '')
-      + '</div>'
-
-      + detHTML
-
-      + '<div style="page-break-inside: avoid; break-inside: avoid; font-size:10px;font-weight:800;color:#e8edf5;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #1e2d42;">'
-      + 'Claim-by-Claim Breakdown &nbsp;<span style="font-size:8px;color:#4a5568;font-weight:400;">' + total + ' claim' + (total !== 1 ? 's' : '') + ' analysed</span>'
-      + '</div>'
-      
-      + claimsHTML
-
-      + '<div style="page-break-inside: avoid; break-inside: avoid; border-top:1px solid #1e2d42;padding-top:14px;margin-top:8px;">'
-      + '<table style="width:100%;border-collapse:collapse;"><tr>'
-      + '<td style="vertical-align:top;">'
-      + '<div style="font-size:9px;font-weight:700;color:#818cf8;letter-spacing:0.06em;">AI FORENSIC ENGINE</div>'
-      + '<div style="font-size:7.5px;color:#4a5568;margin-top:2px;">Automated Fact-Checking &amp; Credibility Analysis</div>'
-      + '</td>'
-      + '<td style="vertical-align:top;text-align:right;">'
-      + '<div style="font-size:7.5px;color:#4a5568;">ID: <span style="color:#6b7a90;font-family:monospace;">' + reportId + '</span></div>'
-      + '<div style="font-size:7.5px;color:#4a5568;margin-top:2px;">AI-generated. Verify critical claims independently.</div>'
-      + '</td>'
-      + '</tr></table>'
-      + '</div>'
-
-      + '</div></div>';
-
-    var pdfDoc = document.getElementById('pdfDocument');
-    pdfDoc.innerHTML = html;
-
-    document.body.classList.add('pdf-export-mode');
-
-    setTimeout(function() {
-        window.print();
+        <div style="font-size:16px; font-weight:800; color:#e8edf5; text-transform:uppercase; margin-bottom:20px; padding-bottom:10px; border-bottom:1px solid #1e2d42;">
+            Atomic Claim Breakdown
+        </div>
+        ${claimsHTML}
         
-        setTimeout(function() {
-            document.body.classList.remove('pdf-export-mode');
-            pdfDoc.innerHTML = '';
-        }, 500);
-    }, 250);
+        <div style="margin-top:50px; text-align:center; border-top:1px solid #1e2d42; padding-top:20px; font-size:12px; color:#4a5568;">
+            This report is AI-generated for forensic purposes. Internal ID: ${reportId}
+        </div>
+    </div>`;
+
+    const opt = {
+        margin:       [0, 0],
+        filename:     `Forensic_Report_${reportId}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { 
+            scale: 2, 
+            useCORS: true, 
+            backgroundColor: '#080c14',
+            width: 1000, // Force the canvas to the expected width
+            windowWidth: 1000
+        },
+        jsPDF:        { unit: 'px', format: [1000, 1414], hotfixes: ['px_scaling'] } // Use custom size based on A4 ratio
+    };
+
+    html2pdf().from(htmlString).set(opt).save();
 });
 
 // ── DOCUMENT MODAL LOGIC ───────────────────────────────────────
